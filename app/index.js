@@ -26,7 +26,7 @@ const { readConfig, writeConfig, effectiveCatalogs, normalizeConfig } = require(
 const STREAM_CAP = 40;
 const TMDB_IMG = 'https://image.tmdb.org/t/p';
 const ADDON_NAME = 'binge-addon';
-const VERSION = '1.0.1';
+const VERSION = '1.0.2';
 
 const builder = new addonBuilder(MANIFEST);
 
@@ -219,9 +219,9 @@ app.get('/admin/api/status', requireAdmin, async (req, res) => {
       ok: true,
       version: VERSION,
       addon: ADDON_NAME,
-      project: 'bharat-streams',
-      projectUrl: 'https://vercel.com/httpbasant2-9067s-projects/bharat-streams',
-      liveUrl: 'https://bharat-streams-httpbasant2-9067s-projects.vercel.app',
+      project: 'binge-addon',
+      projectUrl: 'https://vercel.com/httpbasant2-9067s-projects/binge-addon',
+      liveUrl: 'https://binge-addon-httpbasant2-9067s-projects.vercel.app',
       tmdbKeySet: !!process.env.TMDB_API_KEY,
       blobSet: !!process.env.BLOB_READ_WRITE_TOKEN,
       lastBuiltAt,

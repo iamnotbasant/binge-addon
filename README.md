@@ -8,7 +8,7 @@ copied from any existing addon.
 
 In Stremio / Nuvio, add this manifest URL:
 
-**https://bharat-streams-httpbasant2-9067s-projects.vercel.app/manifest.json**
+**https://binge-addon-httpbasant2-9067s-projects.vercel.app/manifest.json**
 
 ## What it is
 
@@ -47,4 +47,4 @@ consume a version.
 
 ## Deploy
 
-Deployed on Vercel (Hobby/free): https://bharat-streams-httpbasant2-9067s-projects.vercel.app
+Deployed on Vercel (Hobby/free): https://binge-addon-httpbasant2-9067s-projects.vercel.app

@@ -1,5 +1,16 @@
 # Binge Addon — Deploy Notes
 
+> **Rename (v1.0.2, 18 Nov 2026):** the Vercel project itself was renamed
+> `bharat-streams` → **`binge-addon`** (same id
+> `prj_oKm4isKC8VkBBT8kbLkpC2oqFXMq`). **New URL:
+> https://binge-addon-httpbasant2-9067s-projects.vercel.app — basant must
+> reinstall once in Nuvio.** The old URL still answered 200 (v1.0.1) at
+> rename time — Vercel kept the old subdomain serving the previous
+> deployment; it is NOT relied on and may die at any time. **Unchanged:**
+> manifest id `com.bharatstreams`, Blob store `bharat-streams`, local
+> folder `~/workspace/bharat-streams`. Dated sections below keep the old
+> project name/URL where they were current at the time.
+>
 > **Rename (v1.0.1, 18 Nov 2026):** the addon was formerly "Bharat Streams" — display name, log prefixes, package name and `bingeGroup` key are now "Binge Addon" / `binge-addon`. **Unchanged:** manifest id `com.bharatstreams`, Vercel project `bharat-streams`, its URL, and the Blob store. Dated sections below keep the old name where it was the name at the time.
 
 **Status: CODE COMPLETE + LOCAL SMOKE PASSED. DEPLOY BLOCKED — Vercel team access.**
@@ -995,3 +1006,73 @@ Date: 18 Nov 2026. Built by Muse subagents on this VM (no external person/compan
 - **Still open (parent):** basant refreshes in Nuvio (no reinstall
   needed — manifest id unchanged, name + version update on refresh) →
   on-device verdict. First auto cron run 19 Nov 10:30 IST.
+
+## v1.0.2 VERCEL PROJECT RENAME 18 Nov 2026 (bharat-streams → binge-addon)
+
+- **Basant's order (18 Nov, explicit yes):** rename the Vercel project so
+  the install URL itself says "binge". He knows the old link will stop
+  working and he must reinstall once in Nuvio. One user-requested change
+  → version 1.0.1 → **1.0.2** (bite-style versioning).
+- **Name check FIRST:** `GET /v9/projects` (team
+  `httpbasant2-9067s-projects`) → 11 projects, HTTP 200 — NO project
+  named `binge-addon` existed. Free to take.
+- **Rename:** `PATCH /v9/projects/prj_oKm4isKC8VkBBT8kbLkpC2oqFXMq`
+  `{"name": "binge-addon"}` → HTTP 200, response `name: binge-addon`,
+  same id, `ssoProtection: null` (still public, no re-disable needed).
+  **New URL: https://binge-addon-httpbasant2-9067s-projects.vercel.app**
+- **Code/docs updated (no logic changed):** version 1.0.2 in `index.js`
+  VERSION const, `lib/manifest.js`, `package.json`, `package-lock.json`
+  (both version fields); `/health` project fields in `index.js` →
+  project `binge-addon`, projectUrl
+  `https://vercel.com/httpbasant2-9067s-projects/binge-addon`, liveUrl
+  new URL; `lib/admin.html` live + project links → new URL; root
+  `README.md` install + deploy URLs → new URL (`app/README.md` had no
+  old-URL references). This file: rename note at top + this section.
+- **NOT changed (per task):** manifest id `com.bharatstreams`; Blob
+  store `bharat-streams` (store_drqjSj6Uy2iBuItV, bom1 — stores are
+  separate from the project name); local folder
+  `~/workspace/bharat-streams`; GitHub repo (Phase 2's job, untouched
+  here).
+- **Deploy v1.0.2:** `dpl_BAXvmaXaXZxdPypYC5y6wqSpz8Fu` → READY (REST
+  token route, 15 files, ~20 s build; no env vars touched, no catalog
+  rebuild — Blob rows persist). Cron still registered on the new
+  deployment (`0 5 * * *` = 10:30 IST daily).
+- **Live verification (NEW production URL, all PASS):**
+  - Manifest 200, 3,039 bytes: name **"Binge Addon"**, id
+    `com.bharatstreams`, **version 1.0.2**, **27 catalogs**, resources
+    catalog + meta + stream.
+  - Health 200: `{"ok":true,"addon":"binge-addon","version":"1.0.2"}`.
+    (Note: `/health` carries addon + version only; the new project
+    name/URL live in the admin status API + the `/admin` page links,
+    both verified — `/admin` page serves the new manifest + project
+    links, zero old-URL references.)
+  - Trending Indian movie **20/20** (Ramayana: Rise of a Legend first),
+    series **20/20** (Ali Baba Aur 40 Bhoot first).
+  - Meta Jailer 2 (`/meta/movie/tt33318732.json`) 200, full meta: genres
+    Action/Comedy/Drama, director Nelson, year 2026, runtime 165 min,
+    cast 10, poster + description.
+  - `/admin` 200 (14,428 bytes).
+  - Dangal streams 200, **40 streams** in 2.4 s, first
+    `behaviorHints.bingeGroup` `binge-addon:1080p:hindi` (15 streams in
+    that group); **zero** 2160p/4K/1440p/CAM.
+  - All 27 catalog rows fetched live: **455 items total** — identical
+    counts to v1.0.1 (trending 20/20, global 20/20, fresh-digital 20,
+    latest-ott 7, latest-series 20, next-30-days 20/20, big-announcements
+    12/20, newly-announced 20, returning-soon 11, theatres 13, south 20,
+    dark-crime 20, underrated 2/0, scifi 20/20, thrillers 11/20, action
+    19, miniseries 20, visual 20, anime 20, classics 20) — Blob binding
+    survived the rename.
+- **OLD URL status (honest, checked live):** the old URL
+  https://bharat-streams-httpbasant2-9067s-projects.vercel.app/manifest.json
+  still answers **HTTP 200 with the v1.0.1 manifest** (and `/health`
+  200, v1.0.1) — Vercel kept the old subdomain serving the previous
+  deployment at rename time. It was NOT dead as expected. Basant should
+  still reinstall from the NEW link (the old one may die at any time and
+  will never get new versions); the old link is a temporary fallback,
+  not relied on.
+- **Still open (parent):** basant REINSTALLS in Nuvio from the NEW
+  manifest URL (old install will NOT auto-update to the new URL — new
+  project name = new domain) → on-device verdict. First auto cron run
+  19 Nov 10:30 IST (daily rebuild now runs on the renamed project).
+- **New install URL (for Nuvio → Settings → Addons → Install from URL):**
+  **https://binge-addon-httpbasant2-9067s-projects.vercel.app/manifest.json**
