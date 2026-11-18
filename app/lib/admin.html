@@ -6,32 +6,25 @@
 <title>Binge Addon — Admin Dashboard</title>
 <style>
   :root {
-    --bg-canvas: #0b0f17;
-    --bg-sidebar: #0e1420;
-    --bg-card: #141c2b;
-    --bg-card-hover: #1a2436;
-    --border-subtle: #1e293b;
-    --border-focus: #3b82f6;
-    --text-primary: #f8fafc;
-    --text-secondary: #94a3b8;
-    --text-tertiary: #64748b;
-    --accent-primary: #2563eb;
-    --accent-hover: #1d4ed8;
-    --accent-crimson: #ef4444;
-    --accent-crimson-hover: #dc2626;
-    --status-success: #10b981;
-    --status-success-bg: rgba(16, 185, 129, 0.12);
-    --status-error: #ef4444;
-    --status-error-bg: rgba(239, 68, 68, 0.12);
-    --status-warn: #f59e0b;
-    --status-warn-bg: rgba(245, 158, 11, 0.12);
-    --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --bg-canvas: #0a0d12; --bg-sidebar: #0d1117; --bg-card: #12161d;
+    --bg-card-hover: #171d27; --border-subtle: #212a36;
+    --border-hover: rgba(248, 250, 252, 0.14);
+    --text-primary: #f4f3ef; --text-secondary: #9ba1a6; --text-tertiary: #8fa0b3;
+    --text-blue: #7aa5f8;
+    --accent-primary: #2f6fed; --accent-hover: #245fcf; --border-focus: #4a86f5;
+    --status-success: #10b981; --status-error: #ef4444;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --text-sm: 12px; --text-md: 14px;
+    --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; /* unslop-ignore: system stack is intentional — single-file, zero-dependency; utility surface, OS type keeps attention on numbers */
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
     background: var(--bg-canvas);
     color: var(--text-primary);
     min-height: 100vh;
@@ -39,6 +32,17 @@
     flex-direction: column;
     -webkit-font-smoothing: antialiased;
   }
+  :focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+
+  .skip-link { position: absolute; left: -9999px; top: 0; background: var(--bg-card); color: var(--text-primary); padding: 8px 12px; border: 1px solid var(--border-subtle); border-radius: 8px; font-size: 14px; z-index: 200; }
+  .skip-link:focus { left: 16px; top: 16px; }
+
+  .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .mono { font-family: var(--font-mono); }
+
+  /* --- Spinner (CSS border spinner, no emoji) --- */
+  .spinner { width: 14px; height: 14px; border: 2px solid var(--border-subtle); border-top-color: var(--text-blue); border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   /* --- Login Screen --- */
   #view-login {
@@ -56,38 +60,34 @@
     width: 100%;
     max-width: 400px;
     padding: 28px 24px;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
   }
   .login-brand {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     margin-bottom: 8px;
   }
   .login-brand h1 {
     font-size: 20px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
+    font-weight: 600;
+    letter-spacing: 0;
   }
   .login-badge {
-    background: #1e293b;
-    color: #94a3b8;
-    padding: 2px 8px;
-    border-radius: 9999px;
-    font-size: 11px;
+    color: var(--text-tertiary);
+    font-size: 12px;
     font-family: var(--font-mono);
     font-weight: 600;
   }
   .login-desc {
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 12px;
     margin-bottom: 24px;
     line-height: 1.5;
   }
   .login-form {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 16px;
   }
   .pw-wrapper {
     position: relative;
@@ -105,10 +105,10 @@
     border: none;
     color: var(--text-secondary);
     font-size: 12px;
-    padding: 6px;
+    padding: 8px;
     cursor: pointer;
   }
-  .pw-toggle:hover { color: var(--text-primary); }
+  .form-error { font-size: 12px; color: var(--status-error); min-height: 16px; }
 
   /* --- Main App Layout --- */
   #app {
@@ -139,20 +139,17 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
   }
   .brand-title {
-    font-size: 17px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0;
     color: var(--text-primary);
   }
   .version-tag {
-    background: #1e293b;
-    color: #94a3b8;
-    padding: 2px 7px;
-    border-radius: 9999px;
-    font-size: 11px;
+    color: var(--text-tertiary);
+    font-size: 12px;
     font-family: var(--font-mono);
     font-weight: 600;
   }
@@ -168,16 +165,15 @@
     height: 8px;
     border-radius: 50%;
     background: var(--status-error);
-    transition: background-color 0.2s ease;
+    transition: background-color 200ms var(--ease-out), box-shadow 200ms var(--ease-out);
   }
   .status-dot.online {
     background: var(--status-success);
-    box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
   }
 
   .nav-menu {
     flex: 1;
-    padding: 16px 10px;
+    padding: 16px 12px;
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -187,8 +183,8 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 12px;
-    border-radius: 6px;
+    padding: 8px 12px;
+    border-radius: 8px;
     color: var(--text-secondary);
     background: transparent;
     border: none;
@@ -197,33 +193,30 @@
     cursor: pointer;
     text-align: left;
     width: 100%;
-    transition: background-color 0.15s ease, color 0.15s ease;
-  }
-  .nav-btn:hover {
-    background: var(--bg-card);
-    color: var(--text-primary);
   }
   .nav-btn.active {
-    background: var(--bg-card);
+    background: var(--bg-card-hover);
     color: var(--text-primary);
     font-weight: 600;
-    border-left: 3px solid var(--accent-primary);
-    padding-left: 9px;
+    padding-left: 12px;
   }
   .nav-icon {
-    font-size: 15px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 18px;
-    text-align: center;
-    opacity: 0.8;
+    height: 18px;
+    flex-shrink: 0;
+    color: var(--text-secondary);
   }
-  .nav-badge {
+  .nav-icon svg { width: 18px; height: 18px; display: block; }
+  .nav-btn.active .nav-icon { color: var(--text-primary); }
+  .nav-count {
     margin-left: auto;
-    background: #1e293b;
-    color: #94a3b8;
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 9999px;
+    font-size: 11px;
     font-family: var(--font-mono);
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
   }
 
   .sidebar-footer {
@@ -231,34 +224,29 @@
     border-top: 1px solid var(--border-subtle);
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
     background: var(--bg-sidebar);
   }
   .save-btn {
     width: 100%;
-    padding: 10px 14px;
+    padding: 12px 16px;
     background: var(--accent-primary);
     color: #fff;
     border: none;
-    border-radius: 6px;
-    font-size: 13px;
+    border-radius: 8px;
+    font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.15s ease, opacity 0.15s ease;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    opacity: 0.7;
-  }
-  .save-btn:hover:not(:disabled) {
-    background: var(--accent-hover);
+    gap: 8px;
     opacity: 1;
   }
   .save-btn.dirty {
+    background: var(--border-focus);
     opacity: 1;
-    background: var(--accent-primary);
-    box-shadow: 0 0 10px rgba(37, 99, 235, 0.4);
+    font-weight: 700;
   }
   .save-btn:disabled {
     cursor: not-allowed;
@@ -270,21 +258,22 @@
     background: transparent;
     color: var(--text-tertiary);
     border: 1px solid var(--border-subtle);
-    border-radius: 6px;
+    border-radius: 8px;
     font-size: 12px;
     cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
   }
-  .signout-btn:hover {
-    color: var(--text-secondary);
-    border-color: #334155;
+
+  /* --- Press feedback (shared) --- */
+  .save-btn, .btn-primary, .btn-rebuild, .btn-icon, .nav-btn, .signout-btn {
+    transition: transform 160ms var(--ease-out), background-color 150ms var(--ease-out), color 150ms var(--ease-out), opacity 150ms var(--ease-out);
   }
+  .save-btn:active:not(:disabled), .btn-primary:active:not(:disabled), .btn-rebuild:active:not(:disabled), .btn-icon:active:not(:disabled), .nav-btn:active:not(:disabled), .signout-btn:active:not(:disabled) { transform: scale(0.97); }
 
   /* --- Main Content Area --- */
   #main-content {
     flex: 1;
     padding: 24px 32px 60px;
-    max-width: 1100px;
+    max-width: 1440px;
     width: 100%;
     margin: 0 auto;
     overflow-y: auto;
@@ -294,36 +283,38 @@
   }
   .view-panel.active {
     display: block;
-    animation: fadeIn 0.15s ease;
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 150ms var(--ease-out), transform 150ms var(--ease-out);
   }
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(4px); }
-    to { opacity: 1; transform: translateY(0); }
+  @starting-style {
+    .view-panel.active { opacity: 0; transform: translateY(4px); }
   }
 
   .view-header {
-    margin-bottom: 20px;
+    margin-bottom: 24px;
   }
   .view-title {
     font-size: 20px;
     font-weight: 600;
-    letter-spacing: -0.02em;
+    letter-spacing: 0;
     color: var(--text-primary);
     margin-bottom: 4px;
   }
   .view-subtitle {
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1.5;
   }
 
-  /* --- Cards and Common Containers --- */
+  /* --- Ruled surfaces (not card-ification) --- */
   .card {
-    background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
-    border-radius: 10px;
-    padding: 16px 20px;
-    margin-bottom: 16px;
+    background: transparent;
+    border: none;
+    border-top: 1px solid var(--border-subtle);
+    border-radius: 0;
+    padding: 16px 0;
+    margin-bottom: 20px;
   }
   .card-header {
     display: flex;
@@ -332,12 +323,12 @@
     margin-bottom: 12px;
   }
   .card-title {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--text-primary);
   }
   .card-desc {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-secondary);
     margin-bottom: 12px;
     line-height: 1.5;
@@ -347,17 +338,17 @@
   input[type=text], input[type=password], input[type=number], select {
     background: var(--bg-canvas);
     border: 1px solid var(--border-subtle);
-    border-radius: 6px;
+    border-radius: 8px;
     color: var(--text-primary);
     font-family: var(--font-sans);
-    font-size: 13px;
+    font-size: 14px;
     padding: 8px 12px;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    transition: border-color 150ms var(--ease-out), box-shadow 150ms var(--ease-out);
   }
   input[type=text]:focus, input[type=password]:focus, input[type=number]:focus, select:focus {
     outline: none;
     border-color: var(--border-focus);
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    box-shadow: 0 0 0 2px rgba(74, 134, 245, 0.2);
   }
   select {
     cursor: pointer;
@@ -381,9 +372,9 @@
     position: absolute;
     cursor: pointer;
     top: 0; left: 0; right: 0; bottom: 0;
-    background-color: #334155;
-    transition: background-color 0.15s ease;
-    border-radius: 9999px;
+    background-color: var(--border-subtle);
+    transition: background-color 150ms var(--ease-out);
+    border-radius: 9999px; /* unslop-ignore: toggle track is functionally a pill */
   }
   .toggle-slider:before {
     position: absolute;
@@ -393,7 +384,7 @@
     left: 3px;
     bottom: 3px;
     background-color: #ffffff;
-    transition: transform 0.15s ease;
+    transition: transform 150ms var(--ease-out);
     border-radius: 50%;
   }
   .toggle-switch input:checked + .toggle-slider {
@@ -402,187 +393,142 @@
   .toggle-switch input:checked + .toggle-slider:before {
     transform: translateX(18px);
   }
+  input:focus-visible + .toggle-slider { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
 
-  /* --- Badges and Pills --- */
-  .pill {
+  /* --- Status dot + text (replaces all tinted pills) --- */
+  .status-text {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    padding: 3px 8px;
-    border-radius: 9999px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    font-family: var(--font-sans);
-  }
-  .pill.success {
-    background: var(--status-success-bg);
-    color: var(--status-success);
-    border: 1px solid rgba(16, 185, 129, 0.25);
-  }
-  .pill.danger {
-    background: var(--status-error-bg);
-    color: var(--status-error);
-    border: 1px solid rgba(239, 68, 68, 0.25);
-  }
-  .pill.neutral {
-    background: #1e293b;
+    gap: 6px;
+    font-size: 12px;
     color: var(--text-secondary);
-    border: 1px solid #334155;
   }
-  .pill.info {
-    background: rgba(37, 99, 235, 0.12);
-    color: #60a5fa;
-    border: 1px solid rgba(37, 99, 235, 0.25);
-  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-tertiary); flex-shrink: 0; }
+  .dot-ok { background: var(--status-success); }
+  .dot-err { background: var(--status-error); }
+  .dot-neutral { background: var(--text-tertiary); }
 
   /* --- Buttons --- */
   button.btn-primary {
     background: var(--accent-primary);
     color: #fff;
     border: none;
-    border-radius: 6px;
+    border-radius: 8px;
     padding: 8px 16px;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.15s;
   }
-  button.btn-primary:hover { background: var(--accent-hover); }
-  button.btn-danger {
-    background: var(--accent-crimson);
-    color: #fff;
+  button.btn-rebuild {
+    background: var(--text-primary);
+    color: var(--bg-canvas);
     border: none;
-    border-radius: 6px;
+    border-radius: 8px;
     padding: 10px 18px;
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.15s;
   }
-  button.btn-danger:hover { background: var(--accent-crimson-hover); }
   button.btn-icon {
-    background: #1e293b;
+    background: var(--bg-card);
     color: var(--text-secondary);
-    border: 1px solid #334155;
-    border-radius: 5px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
     width: 28px;
     height: 28px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    font-size: 13px;
-    transition: background 0.15s, color 0.15s;
   }
-  button.btn-icon:hover {
-    background: #334155;
-    color: var(--text-primary);
-  }
+  button.btn-icon svg { width: 16px; height: 16px; display: block; }
 
-  /* --- Toast / Alert Banners --- */
+  /* --- Toast / Alert Banners (tint-free; color lives on <strong> only) --- */
   .toast-container {
     margin-bottom: 16px;
   }
   .toast {
     padding: 12px 16px;
     border-radius: 8px;
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.5;
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 10px;
-    animation: fadeIn 0.2s ease;
+    margin-bottom: 8px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out);
   }
-  .toast.success {
-    background: var(--status-success-bg);
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    color: #34d399;
-  }
-  .toast.error {
-    background: var(--status-error-bg);
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    color: #f87171;
-  }
-  .toast.info {
-    background: rgba(37, 99, 235, 0.1);
-    border: 1px solid rgba(37, 99, 235, 0.25);
-    color: #93c5fd;
-  }
+  .toast[data-entering] { opacity: 1; transform: translateY(0); }
+  .toast[data-exiting] { opacity: 0; transform: translateY(-8px); }
+  .toast.success strong { color: var(--status-success); }
+  .toast.error strong { color: var(--status-error); }
+  .toast.info strong { color: var(--text-blue); }
   .toast strong { display: block; font-weight: 600; margin-bottom: 2px; }
   .toast-close {
     background: transparent;
     border: none;
-    color: inherit;
+    color: var(--text-secondary);
     opacity: 0.7;
     cursor: pointer;
-    font-size: 16px;
-    line-height: 1;
     padding: 0 4px;
+    display: inline-flex;
+    align-items: center;
   }
-  .toast-close:hover { opacity: 1; }
+  .toast-close svg { width: 16px; height: 16px; display: block; }
+  .rows-note { margin-bottom: 16px; }
 
-  /* --- Overview Diagnostic Grid --- */
-  .diag-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 12px;
-    margin-bottom: 16px;
+  /* --- Overview hero + status list --- */
+  .overview-hero { margin-bottom: 24px; }
+  .hero-line {
+    font-size: 20px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+    margin-bottom: 4px;
   }
-  .diag-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
-    border-radius: 10px;
-    padding: 16px;
+  .hero-sub { font-size: 12px; color: var(--text-secondary); }
+  .status-list {
     display: flex;
     flex-direction: column;
+    margin-bottom: 24px;
+    border-top: 1px solid var(--border-subtle);
+  }
+  .status-row {
+    display: flex;
+    align-items: center;
     justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-wrap: wrap;
   }
-  .diag-label {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--text-tertiary);
-    margin-bottom: 8px;
-  }
-  .diag-val {
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-bottom: 6px;
-  }
-  .diag-sub {
-    font-size: 12px;
-    color: var(--text-secondary);
-  }
+  .status-note { font-size: 12px; color: var(--text-tertiary); }
 
   /* --- Resource Hub Links --- */
   .resource-links {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 12px;
     margin-top: 8px;
   }
   .resource-link {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    background: #101622;
+    gap: 8px;
+    background: var(--bg-card);
     border: 1px solid var(--border-subtle);
-    border-radius: 6px;
+    border-radius: 8px;
     padding: 8px 12px;
-    color: #60a5fa;
+    color: var(--text-blue);
     text-decoration: none;
-    font-size: 13px;
+    font-size: 12px;
     font-family: var(--font-mono);
-    transition: border-color 0.15s, background-color 0.15s;
-  }
-  .resource-link:hover {
-    border-color: #3b82f6;
-    background: #141c2b;
   }
 
   /* --- Catalogs View --- */
@@ -591,7 +537,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
     flex-wrap: wrap;
   }
   .search-box {
@@ -600,8 +546,9 @@
     max-width: 400px;
   }
   .catalog-count-summary {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
   }
   .catalog-stack {
     display: flex;
@@ -609,21 +556,18 @@
     gap: 8px;
   }
   .cat-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-    padding: 12px 16px;
+    background: transparent;
+    border: none;
+    border-top: 1px solid var(--border-subtle);
+    border-radius: 0;
+    padding: 14px 0;
     display: flex;
     align-items: center;
-    gap: 14px;
-    transition: border-color 0.15s, opacity 0.2s;
+    gap: 16px;
+    transition: background-color 150ms var(--ease-out), opacity 200ms var(--ease-out);
   }
   .cat-card.dimmed {
-    opacity: 0.6;
-    background: #0f1521;
-  }
-  .cat-card:hover {
-    border-color: #2a374a;
+    opacity: 0.85;
   }
   .cat-toggle-col {
     display: flex;
@@ -641,17 +585,20 @@
     width: 250px;
     font-weight: 500;
   }
-  .cat-meta-badges {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  .cat-count {
+    font-size: 12px;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+    white-space: nowrap;
   }
   .cat-titles-preview {
     font-size: 12px;
     color: var(--text-tertiary);
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     max-width: 320px;
   }
   .cat-order-col {
@@ -660,29 +607,40 @@
     gap: 4px;
     margin-left: auto;
   }
+  .empty-note { font-size: 12px; color: var(--text-secondary); margin-top: 16px; }
+  .empty-note button {
+    background: none;
+    border: none;
+    color: var(--text-blue);
+    cursor: pointer;
+    font-size: 12px;
+    text-decoration: underline;
+    padding: 0;
+  }
 
   /* --- Knobs Grid --- */
   .knob-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 12px;
+    gap: 16px;
   }
   .knob-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-    padding: 14px 16px;
+    background: transparent;
+    border: none;
+    border-top: 1px solid var(--border-subtle);
+    border-radius: 0;
+    padding: 14px 0;
   }
   .knob-title {
     font-size: 14px;
     font-weight: 600;
     color: var(--text-primary);
     margin-bottom: 12px;
-    border-bottom: 1px solid #1a2436;
-    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: 8px;
   }
   .knob-field {
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
   .knob-field:last-child { margin-bottom: 0; }
   .knob-label-row {
@@ -700,6 +658,7 @@
     width: 90px;
     text-align: right;
     font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
   }
   .knob-helper {
     font-size: 11px;
@@ -713,7 +672,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 12px 0;
-    border-bottom: 1px solid #1a2436;
+    border-bottom: 1px solid var(--border-subtle);
   }
   .stream-card-row:last-child { border-bottom: none; }
   .stream-provider-info strong {
@@ -726,29 +685,49 @@
     font-size: 12px;
     color: var(--text-secondary);
   }
+  .quality-select-wrap { max-width: 320px; margin-top: 8px; }
+  .quality-select-wrap select { width: 100%; }
 
   /* --- Rebuild View --- */
   .rebuild-console {
     text-align: center;
-    padding: 32px 20px;
+    padding: 24px 0;
   }
-  .rebuild-icon {
-    font-size: 36px;
-    margin-bottom: 12px;
-    color: var(--accent-crimson);
+  .rebuild-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+  .rebuild-lede {
+    color: var(--text-secondary);
+    font-size: 12px;
+    max-width: 540px;
+    margin: 0 auto 20px;
+    line-height: 1.5;
   }
+  .rebuild-progress-box { margin-top: 20px; }
+  .rebuild-progress {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-blue);
+    font-variant-numeric: tabular-nums;
+  }
+  .rebuild-progress .spinner { width: 16px; height: 16px; }
+  .rebuild-note { color: var(--text-tertiary); font-size: 12px; margin-top: 8px; }
   .rebuild-status-box {
     margin: 20px auto 0;
     max-width: 500px;
-    padding: 14px 18px;
-    background: #0b0f17;
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border-subtle);
     font-family: var(--font-mono);
     font-size: 12px;
     color: var(--text-secondary);
     text-align: left;
     line-height: 1.6;
+    opacity: 1;
+    transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out);
+  }
+  @starting-style {
+    .rebuild-status-box { opacity: 0; transform: translateY(4px); }
   }
 
   /* --- 401 Session Recovery Modal --- */
@@ -756,13 +735,15 @@
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0, 0, 0, 0.75);
-    backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 100;
     padding: 20px;
+    opacity: 0;
+    transition: opacity 250ms var(--ease-out);
   }
+  .modal-backdrop[data-open] { opacity: 1; }
   .modal-card {
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
@@ -770,7 +751,36 @@
     width: 100%;
     max-width: 420px;
     padding: 24px;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+    opacity: 0;
+    transition: opacity 250ms var(--ease-out);
+  }
+  .modal-backdrop[data-open] .modal-card { opacity: 1; }
+  .modal-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; color: var(--text-primary); }
+  .modal-text { color: var(--text-secondary); font-size: 12px; margin-bottom: 16px; line-height: 1.5; }
+  .modal-stack { display: flex; flex-direction: column; gap: 12px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+  .modal-actions .signout-btn { width: auto; }
+
+  /* --- Hover (pointer devices only) --- */
+  @media (hover: hover) and (pointer: fine) {
+    .pw-toggle:hover { color: var(--text-primary); }
+    .nav-btn:hover { background: var(--bg-card); color: var(--text-primary); }
+    .save-btn:hover:not(:disabled) { background: var(--accent-hover); opacity: 1; }
+    .signout-btn:hover { color: var(--text-secondary); border-color: var(--border-hover); }
+    .resource-link:hover { border-color: var(--border-hover); background: var(--bg-card-hover); }
+    .cat-card:hover { background: var(--bg-card-hover); }
+    button.btn-primary:hover { background: var(--accent-hover); }
+    button.btn-rebuild:hover { background: #e6e4df; }
+    button.btn-icon:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+    .toast-close:hover { opacity: 1; }
+    .empty-note button:hover { color: var(--text-primary); }
+  }
+
+  /* --- Reduced motion --- */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    .view-panel.active, .toast, .modal-card { transform: none !important; }
+    .spinner { animation: none; border-top-color: var(--border-subtle); }
   }
 
   /* --- Responsive Styles (< 900px) --- */
@@ -796,23 +806,23 @@
     .nav-menu {
       flex-direction: row;
       overflow-x: auto;
-      padding: 6px 12px;
-      gap: 6px;
+      padding: 8px 12px;
+      gap: 8px;
     }
     .nav-btn {
       white-space: nowrap;
+      flex-shrink: 0;
       padding: 8px 12px;
-      font-size: 13px;
+      font-size: 14px;
     }
     .nav-btn.active {
       border-left: none;
-      border-bottom: 2px solid var(--accent-primary);
       padding-left: 12px;
     }
     .sidebar-footer {
       display: none; /* Moved to sticky bottom bar */
     }
-    #mobile-bottom-bar {
+    body.logged-in #mobile-bottom-bar {
       display: flex !important;
     }
     #main-content {
@@ -833,34 +843,40 @@
     bottom: 0; left: 0; right: 0;
     background: var(--bg-sidebar);
     border-top: 1px solid var(--border-subtle);
-    padding: 10px 16px;
+    padding: 12px 16px;
     z-index: 25;
-    gap: 10px;
+    gap: 12px;
     align-items: center;
   }
   #mobile-bottom-bar .save-btn {
     flex: 1;
     margin: 0;
   }
+  #mobile-bottom-bar .signout-btn {
+    width: auto;
+    padding: 12px 16px;
+  }
+
 </style>
 </head>
 <body>
+<a href="#main-content" class="skip-link">Skip to content</a>
 
 <!-- Authentication Screen (#view-login) -->
 <div id="view-login">
   <div class="login-card">
     <div class="login-brand">
       <h1 class="brand-title">Binge Addon</h1>
-      <span class="login-badge">v1.0.9</span>
+      <span class="login-badge">v1.1.0</span>
     </div>
-    <p class="login-desc">Admin Dashboard — Manage catalogs, row settings, stream scrapers, and run manual rebuilds.</p>
+    <p class="login-desc">Admin Dashboard — Manage catalogs, row settings, stream providers, and run manual rebuilds.</p>
     <div class="login-form">
       <div class="pw-wrapper">
-        <input type="password" id="loginPw" placeholder="Admin password" autocomplete="current-password">
-        <button type="button" class="pw-toggle" id="loginPwToggle">Show</button>
+        <input type="password" id="loginPw" placeholder="Admin password" autocomplete="current-password" aria-label="Admin password">
+        <button type="button" class="pw-toggle" id="loginPwToggle" aria-pressed="false">Show</button>
       </div>
       <button class="btn-primary" id="loginSubmitBtn">Sign in</button>
-      <div id="loginErrorMsg" style="font-size:12px; color:var(--accent-crimson); min-height:16px;"></div>
+      <div id="loginErrorMsg" class="form-error"></div>
     </div>
   </div>
 </div>
@@ -871,8 +887,8 @@
   <aside id="sidebar">
     <div class="sidebar-header">
       <div class="brand-row">
-        <span class="brand-title">Binge Addon</span>
-        <span class="version-tag">v1.0.9</span>
+        <h1 class="brand-title">Binge Addon</h1>
+        <span class="version-tag">v1.1.0</span>
       </div>
       <div class="connection-status">
         <span class="status-dot" id="statusDot"></span>
@@ -882,112 +898,75 @@
 
     <nav class="nav-menu">
       <button class="nav-btn active" data-view="overview">
-        <span class="nav-icon">≡</span>
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1" /><rect width="7" height="5" x="14" y="3" rx="1" /><rect width="7" height="9" x="14" y="12" rx="1" /><rect width="7" height="5" x="3" y="16" rx="1" /></svg></span>
         <span>Overview</span>
       </button>
       <button class="nav-btn" data-view="catalogs">
-        <span class="nav-icon">■</span>
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z" /><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" /><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" /></svg></span>
         <span>Catalogs</span>
-        <span class="nav-badge">27 rows</span>
+        <span class="nav-count" id="navCatalogCount">—</span>
       </button>
       <button class="nav-btn" data-view="rows">
-        <span class="nav-icon">⚙</span>
-        <span>Row Settings</span>
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 5H3" /><path d="M12 19H3" /><path d="M14 3v4" /><path d="M16 17v4" /><path d="M21 12h-9" /><path d="M21 19h-5" /><path d="M21 5h-7" /><path d="M8 10v4" /><path d="M8 12H3" /></svg></span>
+        <span>Row settings</span>
       </button>
       <button class="nav-btn" data-view="streams">
-        <span class="nav-icon">▶</span>
-        <span>Stream Sources</span>
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z" /></svg></span>
+        <span>Stream sources</span>
       </button>
       <button class="nav-btn" data-view="rebuild">
-        <span class="nav-icon">⚡</span>
-        <span>Rebuild Catalogs</span>
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg></span>
+        <span>Rebuild catalogs</span>
       </button>
     </nav>
 
     <div class="sidebar-footer">
       <button class="save-btn" id="sidebarSaveBtn">Save Settings</button>
-      <button class="signout-btn" id="sidebarSignOutBtn">Sign Out</button>
+      <button class="signout-btn" id="sidebarSignOutBtn">Sign out</button>
     </div>
   </aside>
 
   <!-- Content Area -->
   <main id="main-content">
     <!-- Global Toast Container -->
-    <div class="toast-container" id="toastArea"></div>
+    <div class="toast-container" id="toastArea" role="status" aria-live="polite"></div>
 
     <!-- Panel 1: Overview (#view-overview) -->
     <div class="view-panel active" id="view-overview">
       <div class="view-header">
         <h2 class="view-title">Overview</h2>
-        <p class="view-subtitle">Live system diagnostics, storage connectivity, and quick resource links.</p>
+        <p class="view-subtitle">System status and quick links</p>
       </div>
 
-      <div class="diag-grid">
-        <div class="diag-card">
-          <div>
-            <div class="diag-label">Addon Core</div>
-            <div class="diag-val" id="diagAddonName">Binge Addon</div>
-            <div class="diag-sub">ID: <span style="font-family:var(--font-mono)">com.bharatstreams</span></div>
-          </div>
-          <div style="margin-top:10px;">
-            <span class="pill info">Version v1.0.9</span>
-          </div>
-        </div>
+      <div class="overview-hero">
+        <div class="hero-line" id="overviewHeroLine">Checking…</div>
+        <div class="hero-sub" id="overviewHeroSub">Last rebuilt —</div>
+      </div>
 
-        <div class="diag-card">
-          <div>
-            <div class="diag-label">TMDB Movie Database</div>
-            <div class="diag-val" id="diagTmdbStatus">—</div>
-            <div class="diag-sub">Discovery & metadata pipeline</div>
-          </div>
-          <div style="margin-top:10px;">
-            <span class="pill neutral" id="diagTmdbPill">Checking…</span>
-          </div>
+      <div class="status-list">
+        <div class="status-row">
+          <span class="status-text"><span class="dot dot-neutral" id="tmdbDot"></span><span id="tmdbStatusText">TMDB · Checking…</span></span>
+          <span class="status-note">Movie and show discovery</span>
         </div>
-
-        <div class="diag-card">
-          <div>
-            <div class="diag-label">Cloud Storage (Vercel Blob)</div>
-            <div class="diag-val" id="diagBlobStatus">—</div>
-            <div class="diag-sub">Mumbai region (bom1)</div>
-          </div>
-          <div style="margin-top:10px;">
-            <span class="pill neutral" id="diagBlobPill">Checking…</span>
-          </div>
+        <div class="status-row">
+          <span class="status-text"><span class="dot dot-neutral" id="blobDot"></span><span id="blobStatusText">Vercel Blob · Checking…</span></span>
+          <span class="status-note">Mumbai region (bom1)</span>
         </div>
-
-        <div class="diag-card">
-          <div>
-            <div class="diag-label">Catalog Rows</div>
-            <div class="diag-val" id="diagCatalogCount">—</div>
-            <div class="diag-sub" id="diagItemsCount">— items cached</div>
-          </div>
-          <div style="margin-top:10px;">
-            <span class="pill neutral">27 rows total</span>
-          </div>
+        <div class="status-row">
+          <span class="status-text"><span class="dot dot-neutral"></span><span id="addonStatusText">Binge Addon · v1.1.0</span></span>
+          <span class="status-note mono">ID: com.bharatstreams</span>
         </div>
-
-        <div class="diag-card" style="grid-column: 1 / -1;">
-          <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:16px;">
-            <div>
-              <div class="diag-label">Last Catalog Update</div>
-              <div class="diag-val" id="diagLastBuilt">—</div>
-              <div class="diag-sub">Indian Standard Time (IST)</div>
-            </div>
-            <div>
-              <div class="diag-label">Next Auto-Update</div>
-              <div class="diag-val">Roz subah 10:30 AM IST</div>
-              <div class="diag-sub">Daily 05:00 UTC automated cron</div>
-            </div>
-          </div>
+        <div class="status-row">
+          <span class="status-text"><span class="dot dot-neutral"></span>Next auto-update · Roz subah 10:30 AM IST</span>
+          <span class="status-note">Daily 05:00 UTC automated cron</span>
         </div>
       </div>
 
       <div class="card">
         <div class="card-header">
-          <h3 class="card-title">Resource Hub</h3>
+          <h3 class="card-title">Resource hub</h3>
         </div>
-        <p class="card-desc">Direct links to essential live feeds and configuration artifacts:</p>
+        <p class="card-desc">Direct links to the live config, manifest and badges:</p>
         <div class="resource-links">
           <a class="resource-link" id="linkManifest" target="_blank" rel="noopener" href="#">manifest.json ↗</a>
           <a class="resource-link" id="linkBadges" target="_blank" rel="noopener" href="#">badges.json ↗</a>
@@ -1001,28 +980,29 @@
     <!-- Panel 2: Catalogs (#view-catalogs) -->
     <div class="view-panel" id="view-catalogs">
       <div class="view-header">
-        <h2 class="view-title">Catalogs Management</h2>
+        <h2 class="view-title">Catalogs</h2>
         <p class="view-subtitle">Band karoge to Nuvio se row gayab ho jayegi; on karoge to wapas aa jayegi. Reorder ya rename karne ke baad Save Settings dabayein.</p>
       </div>
 
       <div class="catalog-toolbar">
-        <div class="catalog-count-summary" id="catCountSummary">Showing 27 of 27 rows</div>
-        <input type="text" class="search-box" id="catSearchInput" placeholder="Filter rows by name or type…">
+        <div class="catalog-count-summary" id="catCountSummary">Loading rows…</div>
+        <input type="text" class="search-box" id="catSearchInput" placeholder="Search rows" aria-label="Search rows">
       </div>
 
       <div class="catalog-stack" id="catalogList"></div>
+      <p class="empty-note" id="catEmptyNote" style="display: none;">No rows match <span class="empty-query"></span>. <button type="button" id="catEmptyClearBtn">Clear filter</button></p>
     </div>
 
     <!-- Panel 3: Rows (#view-rows) -->
     <div class="view-panel" id="view-rows">
       <div class="view-header">
-        <h2 class="view-title">Row Settings (Tuning Knobs)</h2>
-        <p class="view-subtitle">Fine-tune release windows, rating floors, and vote thresholds. Changes apply on the next catalog rebuild.</p>
+        <h2 class="view-title">Row Settings</h2>
+        <p class="view-subtitle">Release windows, minimum ratings, and vote counts. Changes apply on the next rebuild.</p>
       </div>
 
-      <div class="toast info" style="margin-bottom:16px;">
+      <div class="toast info rows-note" data-entering>
         <div>
-          <strong>Note on Row Knobs:</strong>
+          <strong>Note on row knobs:</strong>
           Window ya rating badalne ke baad <b>Rebuild Catalogs</b> dabana zaroori hai, tabhi naye items Nuvio me aayenge.
         </div>
       </div>
@@ -1033,23 +1013,23 @@
     <!-- Panel 4: Streams (#view-streams) -->
     <div class="view-panel" id="view-streams">
       <div class="view-header">
-        <h2 class="view-title">Stream Sources &amp; Video Quality</h2>
-        <p class="view-subtitle">Stream changes take effect immediately without requiring a rebuild (~60s server cache).</p>
+        <h2 class="view-title">Stream sources &amp; video quality</h2>
+        <p class="view-subtitle">Stream changes take effect immediately without requiring a rebuild (~60s server cache)</p>
       </div>
 
       <div class="card">
         <div class="card-header">
-          <h3 class="card-title">Stream Providers</h3>
+          <h3 class="card-title">Stream providers</h3>
         </div>
         <p class="card-desc">Kaunse search engines se streams fetch karni hain. Streams are fetched in parallel with a 7-second cutoff; disabled scrapers are skipped immediately.</p>
 
         <div class="stream-card-row">
           <div class="stream-provider-info">
             <strong>Torrentio</strong>
-            <span>High-speed P2P torrent search provider</span>
+            <span>Torrent search via Torrentio</span>
           </div>
           <label class="toggle-switch">
-            <input type="checkbox" id="streamTorrentio">
+            <input type="checkbox" id="streamTorrentio" aria-label="Torrentio enabled">
             <span class="toggle-slider"></span>
           </label>
         </div>
@@ -1057,10 +1037,10 @@
         <div class="stream-card-row">
           <div class="stream-provider-info">
             <strong>Comet</strong>
-            <span>Fast multi-source stream aggregator</span>
+            <span>Multi-source aggregator (Comet)</span>
           </div>
           <label class="toggle-switch">
-            <input type="checkbox" id="streamComet">
+            <input type="checkbox" id="streamComet" aria-label="Comet enabled">
             <span class="toggle-slider"></span>
           </label>
         </div>
@@ -1071,7 +1051,7 @@
             <span>Dedicated Indian &amp; Hindi stream crawler</span>
           </div>
           <label class="toggle-switch">
-            <input type="checkbox" id="streamHdhub">
+            <input type="checkbox" id="streamHdhub" aria-label="HdHub enabled">
             <span class="toggle-slider"></span>
           </label>
         </div>
@@ -1079,12 +1059,13 @@
 
       <div class="card">
         <div class="card-header">
-          <h3 class="card-title">Maximum Video Quality</h3>
+          <h3 class="card-title">Maximum video quality</h3>
         </div>
-        <p class="card-desc">1080p recommended hai. 4K and CAM rips are always blocked to ensure instant, buffer-free playback on Indian home broadband.</p>
+        <p class="card-desc">1080p recommended hai. 4K and CAM rips are always blocked.</p>
 
-        <div style="max-width: 320px; margin-top: 8px;">
-          <select id="streamMaxQuality" style="width: 100%;">
+        <div class="quality-select-wrap">
+          <label class="visually-hidden" for="streamMaxQuality">Maximum video quality</label>
+          <select id="streamMaxQuality">
             <option value="1080p">1080p Full HD (Recommended)</option>
             <option value="720p">720p HD (Data Saver)</option>
           </select>
@@ -1096,25 +1077,24 @@
     <div class="view-panel" id="view-rebuild">
       <div class="view-header">
         <h2 class="view-title">Rebuild Catalogs</h2>
-        <p class="view-subtitle">Manually trigger the catalog builder to fetch fresh movies from TMDB and regenerate all 27 rows.</p>
+        <p class="view-subtitle">Fetch fresh movies from TMDB and regenerate all <span data-row-count>…</span> rows.</p>
       </div>
 
       <div class="card rebuild-console">
-        <div class="rebuild-icon">⚡</div>
-        <h3 style="font-size:18px; margin-bottom:8px;">Generate Fresh Catalogs Now</h3>
-        <p style="color:var(--text-secondary); font-size:13px; max-width:540px; margin:0 auto 20px; line-height:1.5;">
-          TMDB se fresh movies fetch karke naye rows banata hai (~45 sec lagte hain). Tab band mat karna — builder 27 rows generate kar raha hai.
+        <h3 class="rebuild-title">Generate fresh catalogs now</h3>
+        <p class="rebuild-lede">
+          TMDB se fresh movies fetch karke naye rows banata hai (~45 sec lagte hain). Tab band mat karna: builder <span data-row-count>…</span> rows generate kar raha hai.
         </p>
 
-        <button class="btn-danger" id="rebuildActionBtn">Rebuild Catalogs Now</button>
+        <button class="btn-rebuild" id="rebuildActionBtn">Rebuild catalogs now</button>
 
-        <div id="rebuildProgressBox" style="display:none; margin-top:20px;">
-          <div style="display:inline-flex; align-items:center; gap:8px; font-size:14px; font-weight:600; color:#60a5fa;">
-            <span id="rebuildSpinner">⏳</span>
+        <div id="rebuildProgressBox" class="rebuild-progress-box" style="display:none;">
+          <div class="rebuild-progress">
+            <span class="spinner" id="rebuildSpinner"></span>
             <span id="rebuildProgressText">Rebuilding catalogs… 00:00 / ~00:45</span>
           </div>
-          <p style="color:var(--text-tertiary); font-size:12px; margin-top:6px;">
-            Tab band mat karna — builder TMDB se 27 rows generate kar raha hai.
+          <p class="rebuild-note">
+            Tab band mat karna: builder TMDB se <span data-row-count>…</span> rows generate kar raha hai.
           </p>
         </div>
 
@@ -1127,22 +1107,22 @@
 <!-- Sticky Mobile Action Bar -->
 <div id="mobile-bottom-bar">
   <button class="save-btn" id="mobileSaveBtn">Save Settings</button>
-  <button class="signout-btn" id="mobileSignOutBtn" style="width:auto; padding:10px 14px;">Sign Out</button>
+  <button class="signout-btn" id="mobileSignOutBtn">Sign out</button>
 </div>
 
 <!-- 401 Session Recovery Modal (#authModal) -->
-<div id="authModal" class="modal-backdrop" style="display: none;">
+<div id="authModal" class="modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
   <div class="modal-card">
-    <h3 style="font-size:17px; margin-bottom:8px; color:var(--text-primary);">Session Expired</h3>
-    <p style="color:var(--text-secondary); font-size:13px; margin-bottom:18px; line-height:1.5;">
+    <h3 class="modal-title" id="authModalTitle">Session expired</h3>
+    <p class="modal-text">
       Your session expired or the admin password was rejected. Please re-enter your password to save your pending changes without losing them.
     </p>
-    <div style="display:flex; flex-direction:column; gap:12px;">
-      <input type="password" id="modalPw" placeholder="Admin password">
-      <div id="modalError" style="font-size:12px; color:var(--accent-crimson); min-height:16px;"></div>
-      <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:6px;">
-        <button type="button" class="signout-btn" id="modalCancelBtn" style="width:auto;">Dismiss</button>
-        <button type="button" class="btn-primary" id="modalSubmitBtn">Authenticate &amp; Save</button>
+    <div class="modal-stack">
+      <input type="password" id="modalPw" placeholder="Admin password" aria-label="Admin password">
+      <div id="modalError" class="form-error"></div>
+      <div class="modal-actions">
+        <button type="button" class="signout-btn" id="modalCancelBtn">Dismiss</button>
+        <button type="button" class="btn-primary" id="modalSubmitBtn">Authenticate &amp; save</button>
       </div>
     </div>
   </div>
@@ -1165,7 +1145,7 @@
   // Knob display labels
   const KNOB_LABELS = {
     'fresh-digital-drops': 'Fresh Digital Drops',
-    'latest-indian-ott': 'Latest Indian Movies — OTT Ready',
+    'latest-indian-ott': 'Latest Indian Movies · OTT Ready',
     'latest-indian-series': 'Latest Indian Web Series',
     'releasing-next-30-days': 'Releasing Next 30 Days',
     'big-announcements': 'Big Announcements 2026–2027',
@@ -1178,7 +1158,7 @@
     'psychological-thrillers': 'High-Tension Psychological Thrillers',
     'action-heist-revenge': 'Adrenaline Action, Heist & Revenge',
     'one-season-miniseries': '1-Season Binge Mini-Series',
-    'visual-spectacles': '4K IMAX Visual Spectacles',
+    'visual-spectacles': 'Visual spectacles',
     'action-anime': 'Top Action & Dark Anime',
     'all-time-classics': 'All-Time Classics',
     'dark-crime': 'Indian Dark Crime & Thrillers',
@@ -1212,6 +1192,13 @@
     return json;
   }
 
+  // --- Row counts are always JS-derived (never hardcoded) ---
+  function updateRowCounts(n) {
+    const navCount = $('navCatalogCount');
+    if (navCount) navCount.textContent = String(n);
+    document.querySelectorAll('[data-row-count]').forEach((el) => { el.textContent = String(n); });
+  }
+
   // --- Dirty State Tracking (§7.4.1) ---
   function isDirty() {
     if (!savedConfig || !draftConfig) return false;
@@ -1225,11 +1212,19 @@
     const label = dirty ? 'Save Settings ●' : 'Save Settings';
 
     if (saveBtn) {
-      saveBtn.textContent = isSaving ? 'Saving changes…' : label;
+      if (isSaving) {
+        saveBtn.innerHTML = '<span class="spinner" aria-hidden="true"></span> Saving changes…';
+      } else {
+        saveBtn.textContent = label;
+      }
       saveBtn.classList.toggle('dirty', dirty);
     }
     if (mobileSaveBtn) {
-      mobileSaveBtn.textContent = isSaving ? 'Saving changes…' : label;
+      if (isSaving) {
+        mobileSaveBtn.innerHTML = '<span class="spinner" aria-hidden="true"></span> Saving changes…';
+      } else {
+        mobileSaveBtn.textContent = label;
+      }
       mobileSaveBtn.classList.toggle('dirty', dirty);
     }
   }
@@ -1251,14 +1246,21 @@
         <strong>${escapeHtml(title)}</strong>
         <div>${escapeHtml(message)}</div>
       </div>
-      <button type="button" class="toast-close" title="Dismiss">×</button>
+      <button type="button" class="toast-close" aria-label="Dismiss notification"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button>
     `;
-    toast.querySelector('.toast-close').addEventListener('click', () => toast.remove());
+    const dismiss = () => {
+      if (!toast.isConnected) return;
+      toast.setAttribute('data-exiting', '');
+      setTimeout(() => toast.remove(), 200);
+    };
+    toast.querySelector('.toast-close').addEventListener('click', dismiss);
     container.appendChild(toast);
+    void toast.offsetWidth;
+    toast.setAttribute('data-entering', '');
 
     if (!sticky) {
       setTimeout(() => {
-        if (toast.isConnected) toast.remove();
+        if (toast.isConnected) dismiss();
       }, 7000);
     }
   }
@@ -1284,6 +1286,17 @@
   }
 
   // --- Render Panel 1: Overview ---
+  function relativeAge(date) {
+    const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+    if (seconds < 60) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  }
+
   function renderOverview() {
     if (!statusData) return;
     const isOnline = statusData.tmdbKeySet && statusData.blobSet;
@@ -1291,48 +1304,45 @@
     const dotLabel = $('statusDotLabel');
 
     dot.classList.toggle('online', isOnline);
-    dotLabel.textContent = isOnline ? 'Connected' : 'Config Issue';
+    dotLabel.textContent = isOnline ? 'Connected' : 'Config issue';
 
-    $('diagAddonName').textContent = statusData.addon || 'Binge Addon';
-
-    const tmdbPill = $('diagTmdbPill');
+    const tmdbDot = $('tmdbDot');
+    const tmdbText = $('tmdbStatusText');
     if (statusData.tmdbKeySet) {
-      $('diagTmdbStatus').textContent = 'Connected';
-      tmdbPill.className = 'pill success';
-      tmdbPill.textContent = 'API Key Set';
+      tmdbDot.className = 'dot dot-ok';
+      tmdbText.textContent = 'TMDB · Connected';
     } else {
-      $('diagTmdbStatus').textContent = 'Missing Key';
-      tmdbPill.className = 'pill danger';
-      tmdbPill.textContent = 'Not Set';
+      tmdbDot.className = 'dot dot-err';
+      tmdbText.textContent = 'TMDB · Missing key';
     }
 
-    const blobPill = $('diagBlobPill');
+    const blobDot = $('blobDot');
+    const blobText = $('blobStatusText');
     if (statusData.blobSet) {
-      $('diagBlobStatus').textContent = 'Connected';
-      blobPill.className = 'pill success';
-      blobPill.textContent = 'Blob Store Active';
+      blobDot.className = 'dot dot-ok';
+      blobText.textContent = 'Vercel Blob · Connected';
     } else {
-      $('diagBlobStatus').textContent = 'Disconnected';
-      blobPill.className = 'pill danger';
-      blobPill.textContent = 'Token Missing';
+      blobDot.className = 'dot dot-err';
+      blobText.textContent = 'Vercel Blob · Token missing';
     }
 
     const catalogsList = statusData.catalogs || [];
     const activeCount = catalogsList.filter((c) => !c.disabled).length;
-    $('diagCatalogCount').textContent = `${activeCount} of ${catalogsList.length} visible`;
-
     const totalItems = catalogsList.reduce((acc, c) => acc + (c.count || 0), 0);
-    $('diagItemsCount').textContent = `${totalItems} items cached`;
+    updateRowCounts(catalogsList.length);
+
+    $('overviewHeroLine').textContent = `${activeCount.toLocaleString('en-IN')} of ${catalogsList.length.toLocaleString('en-IN')} visible · ${totalItems.toLocaleString('en-IN')} items`;
 
     if (statusData.lastBuiltAt) {
       const d = new Date(statusData.lastBuiltAt);
-      $('diagLastBuilt').textContent = d.toLocaleString('en-IN', {
+      const absolute = d.toLocaleString('en-IN', {
         timeZone: 'Asia/Kolkata',
         dateStyle: 'medium',
         timeStyle: 'short',
       }) + ' IST';
+      $('overviewHeroSub').textContent = `Last rebuilt ${absolute} · ${relativeAge(d)}`;
     } else {
-      $('diagLastBuilt').textContent = 'Never / Pending';
+      $('overviewHeroSub').textContent = 'Last rebuilt Never / Pending';
     }
 
     const liveUrl = statusData.liveUrl || 'https://binge-addon-httpbasant2-9067s-projects.vercel.app';
@@ -1346,6 +1356,9 @@
   }
 
   // --- Render Panel 2: Catalogs ---
+  const SVG_CHEVRON_UP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6" /></svg>';
+  const SVG_CHEVRON_DOWN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>';
+
   function renderCatalogs() {
     if (!draftConfig || !draftConfig.catalogs) return;
     const container = $('catalogList');
@@ -1357,7 +1370,8 @@
     (statusData?.catalogs || []).forEach((c) => { statusCounts[c.id] = c; });
 
     const activeCount = ids.filter((id) => draftConfig.catalogs[id].enabled !== false).length;
-    $('catCountSummary').textContent = `Showing ${activeCount} of ${ids.length} rows in Nuvio`;
+    $('catCountSummary').textContent = `Showing ${activeCount.toLocaleString('en-IN')} of ${ids.length.toLocaleString('en-IN')} rows in Nuvio`;
+    updateRowCounts(ids.length);
 
     container.innerHTML = ids.map((id) => {
       const c = draftConfig.catalogs[id];
@@ -1365,31 +1379,27 @@
       const isEnabled = c.enabled !== false;
       const isSeries = id.endsWith('-series');
       const topStr = (s.top && s.top.length) ? s.top.join(', ') : 'No preview items';
+      const countText = typeof s.count === 'number' ? s.count.toLocaleString('en-IN') : s.count;
 
       return `
         <div class="cat-card ${isEnabled ? '' : 'dimmed'}" id="catCard-${id}" data-cat-id="${id}">
           <div class="cat-toggle-col">
             <label class="toggle-switch" title="${isEnabled ? 'Visible in Nuvio' : 'Hidden from Nuvio'}">
-              <input type="checkbox" class="cat-enable-toggle" data-cat="${id}" ${isEnabled ? 'checked' : ''}>
+              <input type="checkbox" class="cat-enable-toggle" data-cat="${id}" aria-label="${escapeHtml(c.name || id)} visible in Nuvio" ${isEnabled ? 'checked' : ''}>
               <span class="toggle-slider"></span>
             </label>
           </div>
           <div class="cat-main-col">
-            <input type="text" class="cat-name-input" data-cat="${id}" value="${escapeHtml(c.name || id)}">
-            <div class="cat-meta-badges">
-              <span class="pill neutral">${isSeries ? 'Series' : 'Movie'}</span>
-              <span class="pill ${isEnabled ? 'success' : 'danger'}" id="catStatusPill-${id}">
-                ${isEnabled ? 'Active' : 'Hidden from Nuvio'}
-              </span>
-              <span class="pill info" id="catCountPill-${id}">${s.count} items</span>
-            </div>
-            <div class="cat-titles-preview" title="${escapeHtml(topStr)}">
+            <input type="text" class="cat-name-input" data-cat="${id}" aria-label="Row name for ${id}" value="${escapeHtml(c.name || id)}">
+            <span class="status-text" id="catStatusText-${id}"><span class="dot ${isEnabled ? 'dot-ok' : 'dot-err'}"></span>${isEnabled ? 'Active' : 'Hidden from Nuvio'}</span>
+            <span class="cat-count">${countText} items · ${isSeries ? 'Series' : 'Movie'}</span>
+            <div class="cat-titles-preview">
               Top: ${escapeHtml(topStr)}
             </div>
           </div>
           <div class="cat-order-col">
-            <button class="btn-icon" data-move="${id}" data-dir="-1" title="Move up">↑</button>
-            <button class="btn-icon" data-move="${id}" data-dir="1" title="Move down">↓</button>
+            <button class="btn-icon" data-move="${id}" data-dir="-1" title="Move up" aria-label="Move row up">${SVG_CHEVRON_UP}</button>
+            <button class="btn-icon" data-move="${id}" data-dir="1" title="Move down" aria-label="Move row down">${SVG_CHEVRON_DOWN}</button>
           </div>
         </div>
       `;
@@ -1412,16 +1422,15 @@
 
         // Targeted DOM updates without innerHTML re-render
         const card = $(`catCard-${id}`);
-        const pill = $(`catStatusPill-${id}`);
+        const statusText = $(`catStatusText-${id}`);
         if (card) card.classList.toggle('dimmed', !checked);
-        if (pill) {
-          pill.className = `pill ${checked ? 'success' : 'danger'}`;
-          pill.textContent = checked ? 'Active' : 'Hidden from Nuvio';
+        if (statusText) {
+          statusText.innerHTML = `<span class="dot ${checked ? 'dot-ok' : 'dot-err'}"></span>${checked ? 'Active' : 'Hidden from Nuvio'}`;
         }
 
         const ids = Object.keys(draftConfig.catalogs);
         const active = ids.filter((k) => draftConfig.catalogs[k].enabled !== false).length;
-        $('catCountSummary').textContent = `Showing ${active} of ${ids.length} rows in Nuvio`;
+        $('catCountSummary').textContent = `Showing ${active.toLocaleString('en-IN')} of ${ids.length.toLocaleString('en-IN')} rows in Nuvio`;
 
         updateDirtyIndicator();
       });
@@ -1438,12 +1447,34 @@
         const targetIdx = idx + dir;
         if (targetIdx < 0 || targetIdx >= sorted.length) return;
 
+        // FLIP: record positions before the swap, animate after re-render
+        const rects = new Map();
+        container.querySelectorAll('.cat-card').forEach((el) => {
+          rects.set(el.dataset.catId, el.getBoundingClientRect().top);
+        });
+
         const tmpOrder = draftConfig.catalogs[sorted[idx]].order;
         draftConfig.catalogs[sorted[idx]].order = draftConfig.catalogs[sorted[targetIdx]].order;
         draftConfig.catalogs[sorted[targetIdx]].order = tmpOrder;
 
         updateDirtyIndicator();
         renderCatalogs(); // Structural move requires re-ordering
+
+        [sorted[idx], sorted[targetIdx]].forEach((movedId) => {
+          const el = $(`catCard-${movedId}`);
+          const oldTop = rects.get(movedId);
+          if (el && oldTop != null) {
+            const dy = oldTop - el.getBoundingClientRect().top;
+            if (dy) {
+              if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                el.animate(
+                  [{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0)' }],
+                  { duration: 200, easing: 'cubic-bezier(0.23,1,0.32,1)' }
+                );
+              }
+            }
+          }
+        });
       });
     });
 
@@ -1452,17 +1483,32 @@
 
   function filterCatalogCards() {
     const query = ($('catSearchInput').value || '').trim().toLowerCase();
+    let visible = 0;
     document.querySelectorAll('.cat-card').forEach((card) => {
       const id = card.dataset.catId;
       const c = draftConfig.catalogs[id] || {};
       const name = (c.name || '').toLowerCase();
       const type = id.endsWith('-series') ? 'series' : 'movie';
       const match = !query || name.includes(query) || id.includes(query) || type.includes(query);
+      if (match) visible++;
       card.style.display = match ? 'flex' : 'none';
     });
+    const note = $('catEmptyNote');
+    if (note) {
+      const show = visible === 0 && query.length > 0;
+      note.style.display = show ? 'block' : 'none';
+      if (show) {
+        note.querySelector('.empty-query').textContent = `"${($('catSearchInput').value || '').trim()}"`;
+      }
+    }
   }
 
   $('catSearchInput').addEventListener('input', filterCatalogCards);
+  $('catEmptyClearBtn').addEventListener('click', () => {
+    $('catSearchInput').value = '';
+    filterCatalogCards();
+    $('catSearchInput').focus();
+  });
 
   // --- Render Panel 3: Rows (Tuning Knobs) ---
   function renderKnobs() {
@@ -1478,8 +1524,8 @@
         fields.push(`
           <div class="knob-field">
             <div class="knob-label-row">
-              <span class="knob-label">Release Window (days)</span>
-              <input type="number" min="1" max="1825" data-knob="${key}" data-field="windowDays" value="${k.windowDays}">
+              <label class="knob-label" for="knob-${key}-windowDays">Release window (days)</label>
+              <input type="number" id="knob-${key}-windowDays" min="1" max="1825" data-knob="${key}" data-field="windowDays" value="${k.windowDays}">
             </div>
             <div class="knob-helper">Pichhle kitne dino ki releases dikhani hain (e.g. 45 days).</div>
           </div>
@@ -1490,8 +1536,8 @@
         fields.push(`
           <div class="knob-field">
             <div class="knob-label-row">
-              <span class="knob-label">Minimum Rating (0–10)</span>
-              <input type="number" min="0" max="10" step="0.1" data-knob="${key}" data-field="voteFloor" value="${k.voteFloor}">
+              <label class="knob-label" for="knob-${key}-voteFloor">Minimum rating (0–10)</label>
+              <input type="number" id="knob-${key}-voteFloor" min="0" max="10" step="0.1" data-knob="${key}" data-field="voteFloor" value="${k.voteFloor}">
             </div>
             <div class="knob-helper">Isse kam TMDB rating wali movies filter out ho jayengi.</div>
           </div>
@@ -1502,8 +1548,8 @@
         fields.push(`
           <div class="knob-field">
             <div class="knob-label-row">
-              <span class="knob-label">Minimum Votes Required</span>
-              <input type="number" min="0" step="100" data-knob="${key}" data-field="voteCountFloor" value="${k.voteCountFloor}">
+              <label class="knob-label" for="knob-${key}-voteCountFloor">Minimum votes required</label>
+              <input type="number" id="knob-${key}-voteCountFloor" min="0" step="100" data-knob="${key}" data-field="voteCountFloor" value="${k.voteCountFloor}">
             </div>
             <div class="knob-helper">Kam se kam itne logon ne vote kiya ho, taaki bekar movies na aayein.</div>
           </div>
@@ -1514,8 +1560,8 @@
         fields.push(`
           <div class="knob-field">
             <div class="knob-label-row">
-              <span class="knob-label">Maximum votes</span>
-              <input type="number" min="0" step="100" data-knob="${key}" data-field="voteCountCeil" value="${k.voteCountCeil}">
+              <label class="knob-label" for="knob-${key}-voteCountCeil">Maximum votes</label>
+              <input type="number" id="knob-${key}-voteCountCeil" min="0" step="100" data-knob="${key}" data-field="voteCountCeil" value="${k.voteCountCeil}">
             </div>
             <div class="knob-helper">Isse zyada votes wali popular movies filter out ho jayengi taaki sirf chhupi hui gems dikhein.</div>
           </div>
@@ -1592,7 +1638,7 @@
       updateDirtyIndicator();
 
       showToast(
-        'Settings Saved!',
+        'Settings saved',
         'Nuvio me ~1 minute me dikhega. Nuvio ko refresh ya restart kar lo.',
         'success'
       );
@@ -1618,18 +1664,36 @@
   $('mobileSaveBtn').addEventListener('click', saveSettings);
 
   // --- 401 Session Recovery Modal Logic (§7.4.2) ---
+  let modalOpener = null;
+
   function showAuthModal() {
     const modal = $('authModal');
     const input = $('modalPw');
+    modalOpener = document.activeElement;
     input.value = '';
     $('modalError').textContent = '';
     modal.style.display = 'flex';
+    void modal.offsetWidth;
+    modal.setAttribute('data-open', '');
     input.focus();
   }
 
   function hideAuthModal() {
-    $('authModal').style.display = 'none';
+    const modal = $('authModal');
+    modal.removeAttribute('data-open');
+    setTimeout(() => { modal.style.display = 'none'; }, 250);
+    if (modalOpener && typeof modalOpener.focus === 'function') modalOpener.focus();
   }
+
+  $('authModal').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { hideAuthModal(); return; }
+    if (e.key !== 'Tab') return;
+    const focusables = [$('modalPw'), $('modalCancelBtn'), $('modalSubmitBtn')];
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
 
   async function handleAuthModalSubmit() {
     const newPw = $('modalPw').value.trim();
@@ -1700,23 +1764,23 @@
         showToast('Rebuild Skipped', res.error || 'Prerequisites missing', 'error');
         const box = $('rebuildResultBox');
         box.style.display = 'block';
-        box.innerHTML = `<span style="color:var(--accent-crimson);">⚠️ Rebuild Skipped: ${escapeHtml(res.error || 'Unknown reason')}</span>`;
+        box.innerHTML = `<span style="color:var(--status-error);">Rebuild skipped: ${escapeHtml(res.error || 'Unknown reason')}</span>`;
       } else {
         const counts = res.counts || {};
         const totalItems = Object.values(counts).reduce((a, b) => a + b, 0);
         const rowsCount = Object.keys(counts).length;
 
         showToast(
-          'Rebuild Done!',
-          `${rowsCount} rows updated. Total items: ${totalItems}. Trending Indian Movie: ${counts['trending-indian-movie'] ?? 0} · Series: ${counts['trending-indian-series'] ?? 0}`,
+          'Rebuild done',
+          `${rowsCount.toLocaleString('en-IN')} rows updated. Total items: ${totalItems.toLocaleString('en-IN')}. Trending Indian Movie: ${(counts['trending-indian-movie'] ?? 0).toLocaleString('en-IN')} · Series: ${(counts['trending-indian-series'] ?? 0).toLocaleString('en-IN')}`,
           'success'
         );
 
         const box = $('rebuildResultBox');
         box.style.display = 'block';
         box.innerHTML = `
-          <div style="color:var(--status-success); font-weight:600; margin-bottom:6px;">✓ Rebuild Completed Successfully (${rebuildSeconds}s)</div>
-          <div>Rows updated: ${rowsCount} | Total items: ${totalItems}</div>
+          <div style="color:var(--status-success); font-weight:600; margin-bottom:6px;">Rebuild completed successfully (${rebuildSeconds}s)</div>
+          <div>Rows updated: ${rowsCount.toLocaleString('en-IN')} | Total items: ${totalItems.toLocaleString('en-IN')}</div>
           <div>Trending Indian Movie: ${counts['trending-indian-movie'] ?? 0} items | Series: ${counts['trending-indian-series'] ?? 0} items</div>
         `;
 
@@ -1736,7 +1800,7 @@
       showToast(`Rebuild Failed: ${err.message}`, 'Check logs or try again.', 'error');
       const box = $('rebuildResultBox');
       box.style.display = 'block';
-      box.innerHTML = `<span style="color:var(--accent-crimson);">✗ Rebuild Failed: ${escapeHtml(err.message)}</span>`;
+      box.innerHTML = `<span style="color:var(--status-error);">Rebuild failed: ${escapeHtml(err.message)}</span>`;
     }
   }
 
@@ -1744,17 +1808,13 @@
 
   // --- Initial Data Load ---
   async function loadDashboard() {
+    // Fetch status in parallel; the shell renders as soon as config lands.
+    const statusPromise = apiFetch('/admin/api/status', { headers: headers() });
+    statusPromise.catch(() => {});
     const configRes = await apiFetch('/admin/api/config', { headers: headers() });
     savedConfig = JSON.parse(JSON.stringify(configRes.config));
     draftConfig = JSON.parse(JSON.stringify(savedConfig));
 
-    try {
-      statusData = await apiFetch('/admin/api/status', { headers: headers() });
-    } catch (err) {
-      console.warn('Status fetch error:', err);
-    }
-
-    renderOverview();
     renderCatalogs();
     renderKnobs();
     renderStreams();
@@ -1762,6 +1822,16 @@
 
     $('view-login').style.display = 'none';
     $('app').style.display = 'flex';
+    document.body.classList.add('logged-in');
+
+    const [statusResult] = await Promise.allSettled([statusPromise]);
+    if (statusResult.status === 'fulfilled') {
+      statusData = statusResult.value;
+      renderOverview();
+      renderCatalogs(); // Status carries per-row counts/previews; re-render once it lands.
+    } else {
+      console.warn('Status fetch error:', statusResult.reason);
+    }
   }
 
   // --- Login & Sign Out ---
@@ -1791,6 +1861,7 @@
     draftConfig = null;
     statusData = null;
     $('app').style.display = 'none';
+    document.body.classList.remove('logged-in');
     $('view-login').style.display = 'flex';
     $('loginPw').value = '';
     $('loginErrorMsg').textContent = '';
@@ -1806,6 +1877,7 @@
     const isPw = inp.type === 'password';
     inp.type = isPw ? 'text' : 'password';
     $('loginPwToggle').textContent = isPw ? 'Hide' : 'Show';
+    $('loginPwToggle').setAttribute('aria-pressed', String(isPw));
   });
 
   $('sidebarSignOutBtn').addEventListener('click', doSignOut);
@@ -1817,6 +1889,7 @@
 
   if (pw) {
     loadDashboard().catch(() => {
+      document.body.classList.remove('logged-in');
       $('view-login').style.display = 'flex';
     });
   } else {
