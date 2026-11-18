@@ -27,21 +27,32 @@ In Stremio / Nuvio, add this manifest URL:
   poster, cast, director and runtime inside the addon.
 - **`/admin` dashboard v1** — enable / rename / reorder catalogs, stream
   source toggles, max-quality knob.
-- **Badge pack (v1.0.6 — MINIMAL)** — 23 icon + short-text badges, same dark
-  style, served by the addon itself, no artwork hotlinked:
+- **Badge pack (v1.0.7 — ONYX RESTYLE)** — 23 icon + short-text badges,
+  same dark style, served by the addon itself, no artwork hotlinked:
   **https://binge-addon-httpbasant2-9067s-projects.vercel.app/badges.json**
-  Kept (patterns unchanged): REMUX, BluRay, 1080p/720p/480p, HDR10+,
+  Kept (patterns unchanged except languages): REMUX, BluRay, 1080p/720p/480p, HDR10+,
   HDR10, Dolby Vision, HDR, WEB-DL, WEBRip, Dolby Atmos, DD+, and 10
   languages (Hindi, English, Tamil, Telugu, Malayalam, Kannada, Bengali,
   Marathi, Gujarati, Punjabi). Dropped (the jargon wall): the whole Encoder
   group (HEVC, x265, AVC, x264, 10-Bit), the whole Channels group (7.1,
   5.1, 2.0), and TrueHD, DTS-HD MA, DTS, DD, AAC, FLAC, Opus. A stream now
   shows at most 4 pills instead of 7–9. Groups: Quality, Resolution,
-  Visual, Audio, Language (WEB-DL/WEBRip moved into Quality). Icons are
-  simple drawn glyphs — speaker (audio), sun (HDR), disc (BluRay), globe
-  (WEB-DL + languages), film (WEBRip); REMUX + resolutions are plain bold
-  text. Rendered by `scripts/render-badges-v106.py`; contact sheet at
-  `tests/badge-contact-sheet-106.png`.
+  Visual, Audio, Language (WEB-DL/WEBRip moved into Quality). Style source:
+  nuviobadges.com research (ideas/style only — nothing copied or hotlinked):
+  Xperience Onyx formula — opaque near-black fill `#15171C`, white bold
+  text, thin white-14% hairline border, `tagStyle: "filled"`; Elite-style
+  resolution hierarchy by tint — 1080p solid `#15171C`, 720p frosted
+  white-10% fill, 480p faintest white-3% fill (outline-only look); icons
+  refined (bolder, wider text gutter so speaker arcs never touch the
+  text). Language patterns gained native-script alternations (Obsidian
+  recipe: English name + native script + 3-letter code, e.g. Hindi
+  `हिन्दी|हिंदी`) so Hindi titles written in Devanagari now match; image
+  labels stay English words (DejaVu Sans has no Devanagari coverage).
+  Icons are simple drawn glyphs — speaker (audio), sun (HDR), disc
+  (BluRay), globe (WEB-DL + languages), film (WEBRip); REMUX + resolutions
+  are plain bold text. Rendered by `scripts/render-badges-v107.py`
+  (v1.0.6 script kept intact); contact sheet at
+  `tests/badge-contact-sheet-107.png` (dark background, hierarchy visible).
   Nuvio steps: Profile → Layout → Streams → **Fusion badge URL** → paste the
   link above → Save. Nuvio snapshots the pack on import, so after a pack
   update re-paste the same link to refresh it.

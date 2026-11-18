@@ -26,7 +26,7 @@ const { readConfig, writeConfig, effectiveCatalogs, normalizeConfig } = require(
 const STREAM_CAP = 40;
 const TMDB_IMG = 'https://image.tmdb.org/t/p';
 const ADDON_NAME = 'binge-addon';
-const VERSION = '1.0.6';
+const VERSION = '1.0.7';
 
 const builder = new addonBuilder(MANIFEST);
 
@@ -162,8 +162,10 @@ app.get('/manifest.json', async (req, res) => {
 });
 
 // --- Badge pack (v1.0.4): Nuvio/Fusion badges served as static JSON.
-// v1.0.6: minimal pack — 23 badges, icon + short text PNGs (see
-// scripts/render-badges-v106.py). Every filter carries a real imageURL.
+// v1.0.7: Onyx restyle — same 23 badges, fill #15171C, hairline
+// white-14% border, tagStyle "filled"; 720p/480p PNGs use frosted fills
+// (see scripts/render-badges-v107.py). Language patterns gained
+// native-script alternations; every other pattern is v1.0.6-identical.
 // /badges/:id.png route below (PNGs rendered in-app, served by us).
 // Nuvio snapshots the file on import, so later edits need a re-import.
 app.get('/badges.json', (req, res) => {

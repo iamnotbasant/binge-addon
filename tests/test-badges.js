@@ -1,9 +1,11 @@
-// Binge Addon v1.0.6 — badge-pack rule test.
-// v1.0.6: minimal pack — 23 badges (15 dropped: encoder + channels +
-// audio jargon). Patterns of kept badges UNCHANGED; every filter still
-// carries a real imageURL (addon-hosted PNG);
-// the assertion below checks that exact URL instead of the v1.0.4
-// text-only '' value. Patterns, groups and badge list unchanged.
+// Binge Addon v1.0.7 — badge-pack rule test.
+// v1.0.7: Onyx restyle (look only) — fill #15171C, hairline white-14%
+// border, tagStyle "filled"; resolution hierarchy is a PNG-fill variant
+// only (badges.json tagColor stays #FF15171C for all three). ONE pattern
+// change: the 9 non-English language patterns gain native-script
+// alternations (Obsidian recipe: English name + native script + 3-letter
+// code; English itself has no distinct native script, so it is unchanged).
+// Every other pattern is byte-identical to v1.0.6.
 // Loads app/lib/badges.json (or the LIVE pack when BADGES_URL is set),
 // applies every pattern to REAL live stream titles+descriptions
 // (title + description combined, as Nuvio does), first match per group
@@ -57,7 +59,9 @@ async function getJSON(url) {
     check(groupIds.has(f.groupId), `filter ${f.id} groupId ${f.groupId} exists`);
     check(typeof f.name === 'string' && f.name && typeof f.pattern === 'string' && f.pattern
       && f.imageURL === `${BASE}/badges/${f.id}.png` && f.isEnabled === true
-      && f.tagStyle === 'filled and bordered', `filter ${f.id} fields ok (addon-hosted image, enabled)`);
+      && f.tagStyle === 'filled' && f.tagColor === '#FF15171C'
+      && f.borderColor === '#24FFFFFF' && f.textColor === '#FFFFFF',
+      `filter ${f.id} fields ok (addon-hosted image, enabled, Onyx colors, tagStyle filled)`);
     if (/4k|2160/i.test(f.name) || /4k|2160/i.test(f.pattern)) no4k = false;
   }
   check(no4k, 'no 4K / 2160p badge anywhere in the pack');
@@ -108,6 +112,19 @@ async function getJSON(url) {
   check(matches('lang-telugu', 'Telugu'), "Telugu fires on 'Telugu'");
   check(matches('lang-english', 'Hindi + English'), "English fires on description words 'Hindi + English'");
   check(matches('lang-hindi', 'Hindi + English'), "Hindi fires on description words 'Hindi + English'");
+  // v1.0.7: native-script alternations (Devanagari titles etc.). Bare
+  // alternations, no \\b around non-Latin scripts (\\b is ASCII-only).
+  check(matches('lang-hindi', 'हिंदी फिल्म 1080p'), "Hindi fires on Devanagari 'हिंदी'");
+  check(matches('lang-hindi', 'हिन्दी डब'), "Hindi fires on Devanagari 'हिन्दी'");
+  check(matches('lang-tamil', 'தமிழ்'), "Tamil fires on native 'தமிழ்'");
+  check(matches('lang-telugu', 'తెలుగు'), "Telugu fires on native 'తెలుగు'");
+  check(matches('lang-malayalam', 'മലയാളം'), "Malayalam fires on native 'മലയാളം'");
+  check(matches('lang-kannada', 'ಕನ್ನಡ'), "Kannada fires on native 'ಕನ್ನಡ'");
+  check(matches('lang-bengali', 'বাংলা'), "Bengali fires on native 'বাংলা'");
+  check(matches('lang-marathi', 'मराठी'), "Marathi fires on native 'मराठी'");
+  check(matches('lang-gujarati', 'ગુજરાતી'), "Gujarati fires on native 'ગુજરાતી'");
+  check(matches('lang-punjabi', 'ਪੰਜਾਬੀ'), "Punjabi fires on native 'ਪੰਜਾਬੀ'");
+  check(!matches('lang-hindi', 'English'), "Hindi does NOT fire on plain 'English'");
   check(!('bit10' in byId) && !('ch-5-1' in byId) && !('hevc' in byId) && !('x265' in byId) && !('aac' in byId), '10-Bit / 5.1 / HEVC / x265 / AAC badges are gone (dropped in v1.0.6)');
   check(matches('web-dl', 'WEB-DL') && matches('webrip', 'WEBRip'), 'WEB-DL / WEBRip still fire');
 
