@@ -1467,3 +1467,14 @@ Date: 18 Nov 2026. Built by Muse subagents on this VM (no external person/compan
     - `POST /api/admin/rebuild` -> 401 without password, rejects unauthorized triggers.
     - `GET /api/cron/rebuild` -> 401 without `Bearer CRON_SECRET`, rejects unauthorized triggers.
 
+
+## v1.0.9 CRON AUTH + STATUS LATENCY 18 Nov 2026
+- **Goal:** Close the unauthenticated cron hole properly (strict Bearer CRON_SECRET on both cron routes) and cut warm `/admin/api/status` latency under the 1500ms target.
+- **What changed:**
+  - **`app/api/cron/rebuild.js`:** strict `Authorization: Bearer <CRON_SECRET>` guard — any call without the matching header gets 401 and the rebuild never runs. (Vercel Cron sends the header automatically when the CRON_SECRET env var is set.)
+  - **`app/index.js`:** `_summary.json` in-memory cache, 60s TTL, in the `GET /admin/api/status` Primary branch (module-level `summaryCache = { at, data }`; checked before the Blob `list()` call, stored on successful fetch; fallback branch untouched). Profiled warm status was ~1448ms, of which ~0.87s was the uncached summary read; expected warm ~600ms. Cold stays ~2s (Hobby freeze — accepted, not gold-plated).
+  - **`app/lib/admin.html`:** hardcoded `v1.0.8` strings → `v1.0.9` (login badge, version tag, status pill).
+  - **Version bumps:** `app/index.js` (VERSION = '1.0.9'), `app/lib/manifest.js`, `app/package.json`, `app/package-lock.json` (version fields only).
+  - **CRON_SECRET rotated** at deploy time (fresh value, production + encrypted; value never written anywhere). Deployment captures it at build time, so rotation happened before deploy.
+- **Live verification (production, 18 Nov 2026 — see release notes for ms values):** manifest 1.0.9 / 27 catalogs; /health 1.0.9; /admin 200; status with password 200 (two calls, warm under 1500ms); status without password 401; cron GET without auth 401, with Bearer CRON_SECRET 200 (full rebuild ~28s); admin rebuild POST 401 without password; Trending Indian 20/20 + 20/20; Jailer 2 meta full; /badges.json 200 (23 filters, 0 empty imageURLs).
+- **Still to prove:** next scheduled Vercel cron fire (19 Nov 10:30 IST) is the final proof the rotated secret works with Vercel's automatic Bearer.

@@ -26,7 +26,7 @@ const { readConfig, writeConfig, effectiveCatalogs, normalizeConfig } = require(
 const STREAM_CAP = 40;
 const TMDB_IMG = 'https://image.tmdb.org/t/p';
 const ADDON_NAME = 'binge-addon';
-const VERSION = '1.0.8';
+const VERSION = '1.0.9';
 
 const builder = new addonBuilder(MANIFEST);
 
@@ -223,6 +223,9 @@ app.post('/admin/api/config', requireAdmin, async (req, res) => {
   }
 });
 
+// v1.0.9: in-memory cache for the _summary.json manifest (60s TTL).
+let summaryCache = { at: 0, data: null };
+
 app.get('/admin/api/status', requireAdmin, async (req, res) => {
   try {
     const cfg = await readConfig();
@@ -231,15 +234,22 @@ app.get('/admin/api/status', requireAdmin, async (req, res) => {
     const token = process.env.BLOB_READ_WRITE_TOKEN;
 
     // Primary: fetch lightweight summary manifest catalogs/_summary.json bypassing 5-min store cache
+    // v1.0.9: in-memory cache, 60s TTL — the list()+fetch on every status
+    // call was ~0.87s of the warm ~1.45s latency. Fallback branch untouched.
     let summary = null;
-    if (token) {
+    if (summaryCache.data && Date.now() - summaryCache.at < 60 * 1000) {
+      summary = summaryCache.data;
+    } else if (token) {
       try {
         const { list } = require('@vercel/blob');
         const { blobs } = await list({ prefix: 'catalogs/_summary.json', token });
         const file = (blobs || []).find((b) => b.pathname === 'catalogs/_summary.json');
         if (file) {
           const sRes = await fetch(file.url);
-          if (sRes.ok) summary = await sRes.json();
+          if (sRes.ok) {
+            summary = await sRes.json();
+            summaryCache = { at: Date.now(), data: summary };
+          }
         }
       } catch (err) {
         console.log(`[binge-addon] summary manifest read error: ${err.message}`);
