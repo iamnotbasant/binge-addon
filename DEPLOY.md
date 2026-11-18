@@ -1076,3 +1076,84 @@ Date: 18 Nov 2026. Built by Muse subagents on this VM (no external person/compan
   19 Nov 10:30 IST (daily rebuild now runs on the renamed project).
 - **New install URL (for Nuvio → Settings → Addons → Install from URL):**
   **https://binge-addon-httpbasant2-9067s-projects.vercel.app/manifest.json**
+
+## v1.0.3 STREAM-TITLE + DESCRIPTION FORMAT FIX 18 Nov 2026
+
+- **What changed (code, by a previous worker — this worker only deployed it):**
+  `app/lib/parse.js` only (161+/14−) + new local verify script
+  `tests/repro-format.js` (never inside `app/`, so it cannot ship).
+  Version 1.0.3 in `app/index.js`, `app/lib/manifest.js`,
+  `app/package.json`, `app/package-lock.json` (both version fields).
+  Local: `node --check app/lib/parse.js` clean,
+  `node tests/repro-format.js` ALL CHECKS PASS (exit 0) against real
+  fetched titles.
+- **The five fixes:**
+  1. **CAM filter widened:** DVDScr/SCR/screener/PreDVD/HDTS/HDTC now
+     dropped (was only cam/hdcam/ts/tc/telesync/telecine/camrip, word
+     boundaries). Live before: 9 DVDScr + 3 PreDVD streams in
+     production Ranabaali output.
+  2. **Decimals preserved:** `cleanTitle` no longer turns every dot into
+     a space — 'DD+5.1', '1.5GB', '3.19GB' intact (was 'DD+5 1', '1 5GB').
+  3. **'INGB' gone:** flag emojis (regional-indicator pairs) replaced by
+     language words — description line 2 now reads e.g.
+     '🔊 DD+ AAC Hindi + English' (was '🔊 DD+ DD AAC 🇮🇳🇬🇧', rendering
+     as 'INGB' on clients without flag-emoji support).
+  4. **Site/spam prefixes stripped:** 'www 5MovieRulz company -',
+     'www 1TamilMV io -', '[Bolly4u org]' etc. removed from display
+     titles (was: 37/40 Ranabaali production names started with 'www').
+  5. **Badge-tag false positives fixed:** boundary-aware matching +
+     subsumption — 'DD' no longer matches inside 'DD+'/'DDP' (was
+     'DD+ DD'), 'DV' no longer matches inside 'DVDScr', 'HDR' no longer
+     matches inside 'HDRip'; DDP maps to DD+.
+- **Untouched:** Hindi-first sort, 1080p cap, dedupe, stream sources,
+  manifest id `com.bharatstreams`, 27 catalogs.
+- **Deploy v1.0.3:** `dpl_6hhYLcVcuvFLEZoYWZ4q3gpn2LwR` → READY (REST token
+  route; no env vars touched). Cron still registered on the new
+  deployment (`0 5 * * *` = 10:30 IST daily).
+- **Catalog note (found + fixed during this deploy):** the first live
+  check fetched `/catalog/movie/trending-indian.json` (wrong id — the
+  real catalog ids carry the type suffix, e.g.
+  `trending-indian-movie`) and returned `{metas: []}`, which looked
+  like empty Blob rows. A manual rebuild was run on that reading
+  (`GET /api/cron/rebuild` → 200 in 29.3 s, 27 rows, 455 items —
+  counts identical to the v1.0.2 baseline), then the correct ids
+  confirmed 20/20. The rebuild was harmless (same builder, same rows);
+  the empty read was a wrong-URL artefact, not a data loss.
+- **Live verification (production URL, all PASS):**
+  - Manifest 200, name "Binge Addon", id `com.bharatstreams`,
+    version **1.0.3**, **27 catalogs**, resources catalog + meta + stream.
+  - Health 200 (`binge-addon`, 1.0.3). `/admin` 200 (14,428 bytes).
+  - All 27 rows fetched live: **455 items total** — trending-indian
+    20/20 (movie: Ramayana first; series: Ali Baba Aur 40 Bhoot first),
+    global-trending 20/20, fresh-digital 20, latest-ott 7,
+    latest-series 20, next-30-days 20/20, big-announcements 12/20,
+    newly-announced 20, returning-soon 11, theatres 13, south 20,
+    dark-crime 20, underrated 2/0, scifi 20/20, thrillers 11/20,
+    action 19, miniseries 20, visual 20, anime 20, classics 20 —
+    identical counts to v1.0.2.
+  - Meta Jailer 2 (`/meta/movie/tt33318732.json`) 200, full meta: genres
+    Action/Comedy/Drama, director Nelson, releaseInfo 2026, runtime
+    165 min, cast 10, poster + description.
+  - **Ranabaali streams (`tt32324552`, confirmed from live trending
+    catalog) — 40 streams, 200 in 1.50 s:** 0 DVDScr/SCR/PreDVD,
+    0 www-prefixed names, 0 INGB/flag-emoji in descriptions, 0
+    dot-damage, 0 'DD+ DD', 0 2160p/4K (resolutions only 1080p + 720p).
+    21 names carry intact decimals. First stream:
+    'Ranabaali (2026) 1080p Telugu HQ HDRip - HEVC - x265 -
+    (DD+5.1 - 192Kbps & AAC) - 1.5GB - ESub' /
+    '1080p | HEVC x265 💾 1.5GB\n🔊 DD+ AAC Hindi + English'.
+    Badge tokens present: 1080p, HDR, HEVC, WEB-DL, DD+, AAC
+    (BluRay absent — Ranabaali is a 2026 WEB/HDRip title, expected).
+  - **Dangal streams (`tt5074352`) — 40 streams, 200 in 1.32 s:** same
+    0s across all checks; first stream 'Dangal (2016) 1080p h264' /
+    '1080p 💾 32.18GB\n🔊 Hindi + English'. Badge tokens incl. BluRay.
+  - **Known pre-existing caveat (NOT fixed here):** one HdHub/Dangal
+    stream can show fallback name 'Binge Addon' (empty display title,
+    no parseable filename) — not seen in this run's 40+40 streams, but
+    it is intermittent by source data.
+- **Still open (parent):** basant refreshes in Nuvio (no reinstall
+  needed — manifest version bumped, catalogs refresh per Nuvio cache)
+  → on-device verdict that stream titles/descriptions read clean.
+  First auto cron run 19 Nov 10:30 IST.
+- **Install URL (unchanged):**
+  **https://binge-addon-httpbasant2-9067s-projects.vercel.app/manifest.json**

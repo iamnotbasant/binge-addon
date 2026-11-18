@@ -60,7 +60,12 @@ const DROP_LANGS = new Set([
   'spanish', 'french', 'german', 'thai', 'vietnamese',
 ]);
 
-const LANG_FLAG = { hindi: '🇮🇳', english: '🇬🇧' };
+// Display language labels. The old flag emojis (🇮🇳🇬🇧) render on clients
+// without flag-emoji support as the bare regional-indicator letters
+// "IN"+"GB" — the "INGB" in the reported "DD+ DD AAC INGB" line — so
+// the description now spells the languages out ("Hindi + English").
+// FLAG_LANG (input parsing of source titles) is untouched.
+const LANG_LABEL = { hindi: 'Hindi', english: 'English' };
 
 // ---------------------------------------------------------------------------
 // Field extraction
@@ -101,16 +106,64 @@ const ENCODE_TAGS = ['HEVC', 'x265', 'AVC', 'x264', '10bit'];
 function findTags(text, tags) {
   const found = [];
   for (const tag of tags) {
-    // Escape regex chars; "DD+" needs literal matching.
-    const re = new RegExp(tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-    if (re.test(text)) found.push(tag === 'Dolby Vision' ? 'DV' : tag);
+    // Boundary-aware match (TAG_RE): a bare substring test falsely fires
+    // inside other words — "DV" in "DVDScr", "HDR" in "HDRip", "DD" in
+    // "DD+" / "DDP". Unknown tags fall back to a plain literal test.
+    const re = TAG_RE[tag];
+    const hit = re ? re.test(text)
+      : new RegExp(tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(text);
+    if (hit) found.push(tag === 'Dolby Vision' ? 'DV' : tag);
   }
-  // Dedupe DV vs Dolby Vision double-hit, keep first occurrence order.
-  return [...new Set(found)];
+  let out = [...new Set(found)];
+  // Keep only the most specific variant when several overlap:
+  // "DTS-HD MA" subsumes "DTS", "DD+" (incl. "DDP") subsumes "DD",
+  // "HDR10+"/"HDR10" subsume plain "HDR".
+  if (out.includes('DTS-HD MA')) out = out.filter((t) => t !== 'DTS');
+  if (out.includes('DD+')) out = out.filter((t) => t !== 'DD');
+  if (out.includes('HDR10+')) out = out.filter((t) => t !== 'HDR10' && t !== 'HDR');
+  else if (out.includes('HDR10')) out = out.filter((t) => t !== 'HDR');
+  return out;
 }
 
+// Per-tag matchers. Lookbehind `(?<![A-Za-z])` keeps tags glued to a
+// preceding number ("DD+5.1x264" still yields x264); lookahead blocks a
+// following letter so "HDRip" is not HDR and "DVDScr" is not DV, while a
+// following digit is fine ("HDR10", "DDP5.1"). "DDP" is Dolby Digital
+// Plus, so it maps to "DD+"; "DTS-HDMA" (no space) maps to "DTS-HD MA".
+const TAG_RE = {
+  Atmos: /(?<![A-Za-z])atmos(?![A-Za-z])/i,
+  TrueHD: /(?<![A-Za-z])truehd(?![A-Za-z])/i,
+  'DTS-HD MA': /(?<![A-Za-z])dts-hd\s*ma(?![A-Za-z])/i,
+  DTS: /(?<![A-Za-z])dts(?![A-Za-z-])/i,
+  'DD+': /(?<![A-Za-z])dd\+(?![A-Za-z])|(?<![A-Za-z])ddp(?![A-Za-z])/i,
+  DD: /(?<![A-Za-z])dd(?![A-Za-z+])/i,
+  AAC: /(?<![A-Za-z])aac(?![A-Za-z])/i,
+  FLAC: /(?<![A-Za-z])flac(?![A-Za-z])/i,
+  Opus: /(?<![A-Za-z])opus(?![A-Za-z])/i,
+  'HDR10+': /(?<![A-Za-z])hdr10\+(?![A-Za-z])/i,
+  HDR10: /(?<![A-Za-z])hdr10(?![A-Za-z0-9+])/i,
+  'Dolby Vision': /(?<![A-Za-z])dolby\s+vision(?![A-Za-z])/i,
+  DV: /(?<![A-Za-z])dv(?![A-Za-z])/i,
+  HDR: /(?<![A-Za-z])hdr(?![A-Za-z0-9])/i,
+  BluRay: /(?<![A-Za-z])bluray(?![A-Za-z])/i,
+  'WEB-DL': /(?<![A-Za-z])web-dl(?![A-Za-z])/i,
+  WEBRip: /(?<![A-Za-z])webrip(?![A-Za-z])/i,
+  HEVC: /(?<![A-Za-z])hevc(?![A-Za-z])/i,
+  x265: /(?<![A-Za-z])x265(?![A-Za-z])/i,
+  AVC: /(?<![A-Za-z])avc(?![A-Za-z])/i,
+  x264: /(?<![A-Za-z])x264(?![A-Za-z])/i,
+  '10bit': /(?<![A-Za-z])10-?bit(?![A-Za-z])/i,
+};
+
+// Screener / pre-release / cam sources. The old \b...\b list missed every
+// spelling where the token is glued to another word: "DVDScr" (no boundary
+// before "Scr"), "HDTS" (no boundary around "TS"), "PreDVD", and the
+// bare words "SCR"/"screener" were not listed at all. These alternatives
+// match as substrings because they only occur in screener contexts.
+const CAM_RE = /\b(cam|hdcam|ts|tc|telesync|telecine|camrip)\b|dvdscr|dvd-scr|screener|predvd|pre-dvd|hdts|hdtc|\bscr\b/i;
+
 function isCam(text) {
-  return /\b(cam|hdcam|ts|tc|telesync|telecine|camrip)\b/i.test(text);
+  return CAM_RE.test(text);
 }
 
 // Language set from a block of text: flag emojis first, then word tokens.
@@ -143,6 +196,13 @@ function parseTorrentioLike(stream) {
   const filename = (stream.behaviorHints && stream.behaviorHints.filename) || '';
   const title = stream.title || stream.name || '';
   const parseText = [filename, title].filter(Boolean).join('\n');
+  // Release title for display: filename (clean) beats the raw title —
+  // UNLESS the filename is only a site domain ("www.HDSector.com.mkv":
+  // a real raw case), which carries no release info; then the title's
+  // first line ("Dangal 2016 Hindi 720p HDRip…") is the real name.
+  const fromFile = cleanTitle(filename);
+  const fromTitle = cleanTitle(firstLine(title));
+  const displayTitle = isBareDomainTitle(fromFile) ? (fromTitle || fromFile) : (fromFile || fromTitle);
   return {
     langs: parseLanguages(parseText),
     resolution: parseResolution(parseText),
@@ -151,8 +211,7 @@ function parseTorrentioLike(stream) {
     audio: findTags(parseText, AUDIO_TAGS),
     visual: findTags(parseText, VISUAL_TAGS),
     encode: findTags(parseText, ENCODE_TAGS),
-    // Release title for display: filename (clean) beats the raw title.
-    displayTitle: cleanTitle(filename) || cleanTitle(firstLine(title)),
+    displayTitle,
     rawText: parseText,
   };
 }
@@ -164,7 +223,20 @@ function parseHdHub(stream) {
   const desc = stream.description || '';
   const name = stream.name || '';
   const lines = desc.split('\n').map((l) => l.trim()).filter(Boolean);
-  const fileLine = lines[0] || '';
+  let fileLine = lines[0] || '';
+  // Leading bracketed groups are host/size labels, not the filename:
+  // "[PixelDrain] [💾 2GB] Dangal.2016...mkv". The old filename regex
+  // started matching after the 💾 (not in its char class), leaving a
+  // junk "2GB] Dangal..." display title. Strip host/size groups first.
+  for (;;) {
+    const m = fileLine.match(/^\s*\[([^\]]*)\]\s*/);
+    if (!m) break;
+    const inner = m[1];
+    if (/💾/.test(inner) || /^\s*[\d.]+\s*(GB|MB)\s*$/i.test(inner)
+      || /pixeldrain|gdrive|mega|filepress|drive/i.test(inner)) {
+      fileLine = fileLine.slice(m[0].length);
+    } else break;
+  }
   // Filename is the last bracketed token run in the first line.
   const fileMatch = fileLine.match(/([A-Za-z0-9._\-()[\] ]+\.(mkv|mp4|avi|webm))\s*$/i)
     || fileLine.match(/(\S+\.(mkv|mp4|avi|webm))/i);
@@ -195,13 +267,88 @@ function firstLine(text) {
   return (text || '').split('\n')[0].trim();
 }
 
+// True when a cleaned title is just a site domain ("www HDSector com")
+// with no release info at all — no year, resolution, or codec token.
+// A real title always carries at least one of those.
+function isBareDomainTitle(t) {
+  if (!t) return true;
+  if (/\b(19|20)\d\d\b|\b(480|720|1080|2160)p?\b|\b(x264|x265|hevc|avc|web-dl|bluray|hdrip|aac|dd\+?|dts)\b/i.test(t)) return false;
+  return /^\s*www\s+\S+(\s+\S+)?\s*$/i.test(t)
+    || new RegExp(`^\\s*\\S+\\s+(?:${SITE_TLDS.join('|')})\\s*$`, 'i').test(t);
+}
+
+// Site/spam tokens stripped from display titles. TLDs and known piracy-
+// site names only — never a bare digit test, so "[1080p]", "[720p]" and
+// language brackets like "[Tam + Hin + Mal + Kan]" survive.
+const SITE_TLDS = ['com', 'net', 'org', 'io', 'in', 'co', 'cc', 'to', 'me',
+  'xyz', 'info', 'site', 'online', 'live', 'top', 'click', 'vip', 'fun',
+  'app', 'world', 'one'];
+const SITE_WORDS = ['movierulz', 'tamilmv', 'tamilvaathi', 'bolly4u',
+  'hdhub4u', 'filmyzilla', 'filmywap', '9xmovies', 'vegamovies',
+  'moviesflix', 'worldfree4u', 'skymovieshd', 'tamilrockers', 'moviesda',
+  'katmoviehd', '7starhd', '8xmovies', '1tamilmv', '5movierulz'];
+const SITE_ALT = [...SITE_WORDS, ...SITE_TLDS].join('|');
+
+// Strip release-site spam from an already space-normalised title:
+// leading "www <site> <word> - " prefixes, bare "<site> - " prefixes,
+// bracketed "[<site> ...]" tags anywhere, trailing "-<site> ..." groups
+// and trailing "- www <site> ..." promos. Badge tokens (1080p, HDR,
+// HEVC/x265, WEB-DL, DD+5.1, sizes) are never in these patterns.
+function stripSitePrefix(t) {
+  let out = t;
+  // Leading junk size fragment (HdHub fallback): "12.91 GB] Ranabaali…".
+  out = out.replace(/^\s*\d+(\.\d+)?\s*(GB|MB)\]?\s*/i, '');
+  for (let i = 0; i < 3; i++) {
+    const before = out;
+    // "www 5MovieRulz company - ", "www 1TamilMV io - ", "www 1TamilMV solar - "
+    out = out.replace(/^\s*www\s+(?:\S+\s+){1,2}[-–:|]\s*/i, '');
+    // Bare site prefix: "5MovieRulz - ", "5MovieRulz company - ",
+    // "1TamilMV io - " (digit-carrying token or known site word, then an
+    // optional second word, then a dash). A leading "<word> <word> - "
+    // before the movie name is a site prefix in release titles — the
+    // movie name itself is always followed by its year, not a dash.
+    out = out.replace(new RegExp(
+      `^\\s*(?:[A-Za-z0-9]*\\d[A-Za-z0-9]*|${SITE_WORDS.join('|')})(?:\\s+\\S+)?\\s*[-–:|]\\s*`, 'i'), '');
+    // Leading bracketed site tag: "[Bolly4u org] Ranabaali…".
+    out = out.replace(new RegExp(`^\\s*\\[[^\\]]*\\b(?:${SITE_ALT})\\b[^\\]]*\\]\\s*[-–:]?\\s*`, 'i'), '');
+    if (out === before) break;
+  }
+  // Bracketed site tag anywhere mid-title: "Ranabaali 2026 [Bolly4u org] WEB-DL…".
+  out = out.replace(new RegExp(`\\[[^\\]]*\\b(?:${SITE_ALT})\\b[^\\]]*\\]`, 'gi'), '');
+  // Trailing release-group site suffix: "…x265-HDHub4u Ms", "…x264 HDHub4u".
+  out = out.replace(new RegExp(`\\s*[-–]\\s*(?:${SITE_WORDS.join('|')})\\b.*$`, 'i'), '');
+  out = out.replace(new RegExp(`\\s+(?:${SITE_WORDS.join('|')})\\b.*$`, 'i'), '');
+  // Trailing site promo: "…ESubs - www TamilVaathi online".
+  out = out.replace(/\s*[-–]\s*www\s.*$/i, '');
+  return out.replace(/\s+/g, ' ').trim();
+}
+
 // "Dangal.2016.1080p.BluRay.x264-[YTS.AM].mp4" -> "Dangal 2016 1080p BluRay x264"
 function cleanTitle(text) {
   if (!text) return '';
   let t = text.replace(/\.(mkv|mp4|avi|webm)$/i, '');
-  t = t.replace(/[._]+/g, ' ').replace(/\s+/g, ' ').trim();
-  // Strip trailing bracketed release-group tags like "[YTS AM]".
+  // Dots are word separators ("Dangal.2016.1080p") EXCEPT a decimal dot
+  // between two digits with a short fraction ("DD+5.1", "1.5GB",
+  // "3.19GB"). The old /[._]+/g -> ' ' turned every decimal into
+  // "DD+5 1" / "1 5GB". A 3+-digit run after the dot is a year/res
+  // separator ("2016.1080p" -> "2016 1080p"), not a decimal.
+  t = t.replace(/\./g, (m, off, str) => {
+    const prev = str[off - 1];
+    const next = str[off + 1];
+    if (/\d/.test(prev || '') && /\d/.test(next || '')) {
+      let run = 0;
+      for (let j = off + 1; j < str.length && /\d/.test(str[j]); j++) run++;
+      if (run <= 2) return '.';
+    }
+    return ' ';
+  });
+  t = t.replace(/_+/g, ' ').replace(/\s+/g, ' ').trim();
+  t = stripSitePrefix(t);
+  // Strip trailing bracketed release-group tags like "[YTS AM]" and
+  // trailing "{imdb-tt...}" metadata, plus a leftover trailing dash.
   t = t.replace(/\s*\[[^\]]*\]\s*$/g, '').trim();
+  t = t.replace(/\s*\{[^}]*\}\s*$/g, '').trim();
+  t = t.replace(/[-–—]+\s*$/, '').trim();
   return t;
 }
 
@@ -337,10 +484,10 @@ function formatStream(p) {
   let line1 = visualBits.length ? `${res} | ${visualBits.join(' ')}` : res;
   if (p.size) line1 += ` 💾 ${p.size.value}${p.size.unit}`;
 
-  const flags = [...p.langs].filter((l) => LANG_FLAG[l]).map((l) => LANG_FLAG[l]).join('');
+  const langLabels = [...p.langs].filter((l) => LANG_LABEL[l]).map((l) => LANG_LABEL[l]);
   const line2bits = [];
   if (p.audio.length) line2bits.push(p.audio.join(' '));
-  if (flags) line2bits.push(flags);
+  if (langLabels.length) line2bits.push(langLabels.join(' + '));
   const line2 = line2bits.length ? `🔊 ${line2bits.join(' ')}` : '';
 
   const hints = {};
