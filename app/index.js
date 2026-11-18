@@ -26,7 +26,7 @@ const { readConfig, writeConfig, effectiveCatalogs, normalizeConfig } = require(
 const STREAM_CAP = 40;
 const TMDB_IMG = 'https://image.tmdb.org/t/p';
 const ADDON_NAME = 'binge-addon';
-const VERSION = '1.0.3';
+const VERSION = '1.0.4';
 
 const builder = new addonBuilder(MANIFEST);
 
@@ -159,6 +159,13 @@ app.get('/manifest.json', async (req, res) => {
   } catch (e) {
     res.json(MANIFEST);
   }
+});
+
+// --- Badge pack (v1.0.4): Nuvio/Fusion badges served as static JSON.
+// Text-only badges (no artwork hotlinked, nothing copied); Nuvio
+// snapshots the file on import, so later edits need a re-import.
+app.get('/badges.json', (req, res) => {
+  res.sendFile(path.join(__dirname, 'lib', 'badges.json'));
 });
 
 // --- Admin dashboard (v2.1.0): same project, no new hosting.

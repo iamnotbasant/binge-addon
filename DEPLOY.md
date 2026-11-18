@@ -1157,3 +1157,97 @@ Date: 18 Nov 2026. Built by Muse subagents on this VM (no external person/compan
   First auto cron run 19 Nov 10:30 IST.
 - **Install URL (unchanged):**
   **https://binge-addon-httpbasant2-9067s-projects.vercel.app/manifest.json**
+
+## v1.0.4 BADGE PACK 18 Nov 2026 (basant: Nuvio stream badges, served by the addon)
+
+- **What it is:** Binge's OWN badge pack — 7 groups, 38 text-only badges
+  (`imageURL` blank on every badge, so no artwork is hotlinked or copied
+  from Xperience/FR-Badges), served by the addon itself at
+  `GET /badges.json`. Schema reverse-engineered from the live Xperience
+  pack + cross-checked against FR-Badges (no official spec exists):
+  top-level object has EXACTLY two keys `{groups, filters}`; group
+  `{id, name, color, borderColor, isExpanded}`; filter
+  `{type: "filter", id, name, pattern, tagColor, borderColor, textColor,
+  tagStyle: "filled and bordered", imageURL, isEnabled, groupId}`.
+  Matching is regex against the stream's title + description text;
+  badges are evaluated in array order, first match per group wins.
+- **Groups (7 — no Streaming group):** Quality, Resolution, Visual,
+  Audio, Encoder, Channels, Language.
+  **Badges:** Quality — REMUX, BluRay; Resolution — 1080p, 720p, 480p
+  (NO 4K — the addon caps at 1080p, so a 4K badge must never appear);
+  Visual — HDR10+, HDR10, Dolby Vision, HDR, WEB-DL, WEBRip; Audio —
+  Dolby Atmos, TrueHD, DTS-HD MA, DTS, DD+, DD, AAC, FLAC, Opus;
+  Encoder — HEVC, x265, AVC, x264, 10-Bit; Channels — 7.1, 5.1, 2.0;
+  Language — Hindi, English, Tamil, Telugu, Malayalam, Kannada,
+  Bengali, Marathi, Gujarati, Punjabi. One palette for all badges:
+  dark fill `#1A1A1A`, border `#FF858283`, white text `#FFFFFF`.
+- **Boundary traps (all fixed by pattern, not by luck):** HDR must not
+  fire on `HDRip` (`\bhdr\b` — no boundary inside HDRip); DV must not
+  fire on `DVDScr`/`DVDRip` (`\bdv\b`); DD must not fire inside `DD+`/
+  `DDP` (`\bdd(?!\+)\b`, DDP maps to DD+); HDR10+ suppresses HDR10/HDR
+  (order + `(?![a-z0-9+])`); DTS-HD MA suppresses DTS (`\bdts\b(?!-)`);
+  REMUX before BluRay (array order — only one Quality badge shows);
+  language rules fire on description words (`Hindi + English`) AND
+  title tokens (`[Tam + Hin + Mal + Kan]`, `Telugu`, `Tamil`…).
+- **Code changes:** new `app/lib/badges.json` (9,680 bytes); `GET
+  /badges.json` route in `app/index.js` right after `/manifest.json`
+  (same `sendFile` pattern as `/admin`, static JSON — far under the
+  10 s `api/index.js` limit); one-line `badges.json` link in the
+  Connection-status paragraph of `app/lib/admin.html`. No `vercel.json`
+  change (the `/(.*)` → `/api` rewrite already routes it). Version
+  1.0.3 → **1.0.4** in `app/index.js`, `app/lib/manifest.js`,
+  `app/package.json`, `app/package-lock.json` (both version fields).
+  New test `tests/test-badges.js` (kept under `tests/`, never ships in
+  `app/`): schema validation + synthetic trap checks + real live titles.
+- **Local test BEFORE deploy (all PASS, exit 0):**
+  `node tests/test-badges.js` — **227 checks PASS, 0 FAIL** against
+  119 real live titles (Ranabaali 39 + Dangal 40 + The Odyssey 40,
+  tt33764258 from the live Global Trending catalog): no title gets a
+  4K badge; no HDR from `HDRip` alone (21 HDRip titles checked);
+  no DV from `DVDScr`; no DD on any `DD+`/`DDP` title; at least one
+  title each gets 1080p, HEVC, BluRay, WEB-DL, DD+, Hindi, English.
+  Badges seen across the 119 titles: 1080p, 720p, 480p, 5.1, 7.1,
+  REMUX, BluRay, WEB-DL, WEBRip, HEVC, x264, x265, AVC, 10-Bit, DD,
+  DD+, DTS-HD MA, Dolby Atmos, TrueHD, AAC, Hindi, English, HDR.
+  Local smoke: `GET /badges.json` 200, 7 groups, 38 filters;
+  `/health` 1.0.4; `/manifest.json` + `/admin` 200.
+- **Deploy v1.0.4:** `dpl_CR21NkjzyAS7oea1WYg9iCx17Yuo` → READY (REST
+  token route, 16 files incl. `lib/badges.json`, ~25 s; no env vars
+  touched, no catalog rebuild — Blob rows persist). Cron still
+  registered on the new deployment (`0 5 * * *` = 10:30 IST daily).
+  Deploy helper committed as `deploy-binge.py` (repo root) for reuse.
+- **Live verification (production URL, all PASS):**
+  - Manifest 200: name **"Binge Addon"**, id `com.bharatstreams`,
+    **version 1.0.4**, **27 catalogs**, resources catalog + meta +
+    stream. Health 200 (`binge-addon`, 1.0.4).
+  - `GET /badges.json` 200, `Content-Type: application/json`,
+    keys exactly `{groups, filters}`, 7 groups, 38 filters, all
+    text-only, **zero URLs inside the file** (no external artwork).
+  - `/admin` 200, page links `badges.json` next to `manifest.json`.
+  - Trending Indian movie **20/20** (Ramayana: Rise of a Legend,
+    Jailer 2, Ranabaali), series **20/20** (Ali Baba Aur 40 Bhoot,
+    Akka, Student of the Year: After Dark). All 27 rows fetched:
+    **455 items total** — identical counts to the v1.0.3 baseline.
+  - Meta Jailer 2 (`/meta/movie/tt33318732.json`) 200, full meta:
+    genres Action/Comedy/Drama, director Nelson, releaseInfo 2026,
+    runtime 165 min, cast 10, poster + description.
+  - **Rule test re-run against the LIVE `/badges.json`** (`BADGES_URL=…
+    node tests/test-badges.js`): **243 checks PASS, 0 FAIL** on live
+    titles — same traps verified on the served file, not just the
+    local copy. Sample per-title badges (live):
+    Ranabaali 1080p HDRip HEVC x265 DD+5.1 → `{1080p, DD+, HEVC,
+    5.1, Hindi}` (no HDR — HDRip correctly suppressed); Ranabaali
+    TRUE WEB-DL AVC DD+5.1 → `{1080p, WEB-DL, DD+, AVC, 5.1,
+    Hindi}`; The Odyssey BluRay REMUX AVC DTS-HD MA → `{REMUX,
+    1080p, DTS-HD MA, AVC, 5.1, Hindi}`; The Odyssey BRRip x265
+    DDP 5.1 → `{1080p, DD+, x265, 5.1, Hindi}`.
+- **Badge pack link (for Nuvio → Profile → Layout → Streams →
+  Fusion badge URL):**
+  **https://binge-addon-httpbasant2-9067s-projects.vercel.app/badges.json**
+  Nuvio snapshots the pack on import — later pack edits need a
+  re-paste by the user. Up to 3 Fusion badge URLs per profile.
+- **Still open (parent):** basant pastes the badge link in Nuvio
+  himself → on-device verdict whether the badges show on stream
+  lists (the addon serving the pack is verified; applying it in
+  Nuvio is his one paste, NOT verified here). First auto cron run
+  19 Nov 10:30 IST.

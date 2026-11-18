@@ -27,6 +27,13 @@ In Stremio / Nuvio, add this manifest URL:
   poster, cast, director and runtime inside the addon.
 - **`/admin` dashboard v1** — enable / rename / reorder catalogs, stream
   source toggles, max-quality knob.
+- **Badge pack (v1.0.4)** — text-only stream badges (quality, resolution,
+  HDR/Dolby Vision, audio, encoder, channels, language) served by the addon
+  itself, no artwork hotlinked:
+  **https://binge-addon-httpbasant2-9067s-projects.vercel.app/badges.json**
+  Nuvio steps: Profile → Layout → Streams → **Fusion badge URL** → paste the
+  link above → Save. Nuvio snapshots the pack on import, so after a pack
+  update re-paste the same link to refresh it.
 
 ## Layout
 

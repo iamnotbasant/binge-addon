@@ -10,6 +10,8 @@ existing addon.
 - `api/index.js` — Vercel serverless entry (re-exports the Express app).
 - `api/cron/rebuild.js` — daily cron endpoint, runs the catalog builder.
 - `lib/manifest.js` — manifest: 24 catalogs, `idPrefixes: ["tt"]` on stream.
+- `lib/badges.json` — Nuvio/Fusion badge pack (v1.0.4): 7 groups, 38
+  text-only badges, served at `GET /badges.json` (see `../README.md`).
 - `lib/sources.js` — fan-out to Torrentio / Comet / HdHub (3.5 s per source,
   ~7 s overall deadline, circuit-breaker, `DISABLE_SOURCES` env flag).
 - `lib/parse.js` — per-source parsing, §7.4 filters, §7.5 sort, §7.6 format.
