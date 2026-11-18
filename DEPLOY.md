@@ -1,4 +1,6 @@
-# Bharat Streams — Deploy Notes (Phase 2, v1.0.0)
+# Binge Addon — Deploy Notes
+
+> **Rename (v1.0.1, 18 Nov 2026):** the addon was formerly "Bharat Streams" — display name, log prefixes, package name and `bingeGroup` key are now "Binge Addon" / `binge-addon`. **Unchanged:** manifest id `com.bharatstreams`, Vercel project `bharat-streams`, its URL, and the Blob store. Dated sections below keep the old name where it was the name at the time.
 
 **Status: CODE COMPLETE + LOCAL SMOKE PASSED. DEPLOY BLOCKED — Vercel team access.**
 Date: 18 Nov 2026. Built by Muse subagents on this VM (no external person/company/service).
@@ -946,3 +948,50 @@ Date: 18 Nov 2026. Built by Muse subagents on this VM (no external person/compan
   pending (parent).
 - Production URL unchanged:
   https://bharat-streams-httpbasant2-9067s-projects.vercel.app
+
+## v1.0.1 RENAME SWEEP 18 Nov 2026 (Bharat Streams → Binge Addon)
+
+- **What changed (code, rename-only, no logic):** every comment/header
+  saying "Bharat Streams" → "Binge Addon"; log prefixes
+  `[bharat-streams]` → `[binge-addon]` (`lib/sources.js` ×10,
+  `lib/store.js` ×3, `lib/config.js` ×1); `bingeGroup` key
+  `bharat-streams:…` → `binge-addon:…` (`lib/parse.js` — resets Nuvio's
+  binge-grouping once, harmless); package name `bharat-streams` →
+  `binge-addon` (`package.json`, `package-lock.json`); `app/README.md`
+  + `pretest/SUMMARY.md` titles → Binge Addon; `scripts/build-catalogs.js`
+  header → Binge Addon. Version 1.0.0 → **1.0.1** in `index.js` VERSION
+  const, `lib/manifest.js` version, `package.json` version,
+  `package-lock.json` (name + version), `lib/sources.js` User-Agent
+  (`BingeAddon/1.0.1`).
+- **Docs:** this file's heading → "Binge Addon — Deploy Notes" + rename
+  note at top; `design_draft.md` title + header note only (40+ body
+  mentions kept as history); `tests/T1-T10.md` title + header note only
+  (dated test records intact); root `README.md` already said Binge Addon.
+  `admin.html` had no user-visible "Bharat Streams" text — only the two
+  href URLs, which stay exactly as they are.
+- **NOT changed (per task):** manifest id `com.bharatstreams`; Vercel
+  project name `bharat-streams`, its URL, Blob store name; `/health`
+  `project`/`projectUrl`/`liveUrl` fields; local folder
+  `~/workspace/bharat-streams`; TMDB network slug `starbharat` in the
+  builder blocklist (real channel name, not the addon); `update-design-v20.py`
+  local-path references (one-off script).
+- **Deploy v1.0.1:** `dpl_9Kw9ogcVtSpRq7pKzQZ6NuT9RtUu` → READY, PROMOTED
+  (REST token route, 15 files, ~13 s build; no env vars touched, no
+  catalog rebuild — Blob rows persist). Cron still registered on the new
+  deployment (`0 5 * * *` = 10:30 IST daily). Production URL unchanged:
+  https://bharat-streams-httpbasant2-9067s-projects.vercel.app
+- **Live verification (production URL, all PASS):**
+  - Manifest 200, 3,039 bytes: name **"Binge Addon"**, id
+    `com.bharatstreams`, **version 1.0.1**, **27 catalogs**, resources
+    catalog + meta + stream.
+  - Health 200: `{"ok":true,"addon":"binge-addon","version":"1.0.1"}`.
+  - Trending Indian movie **20/20** (Ramayana: Rise of a Legend first),
+    series **20/20** (Ali Baba Aur 40 Bhoot first).
+  - Meta Jailer 2 (`/meta/movie/tt33318732.json`) 200, full meta: genres
+    Action/Comedy/Drama, director Nelson, year 2026, runtime 165 min,
+    cast 10, poster + 150-char description.
+  - `/admin` 200. Dangal streams 40, first `bingeGroup`
+    `binge-addon:1080p:hindi` (new key live).
+- **Still open (parent):** basant refreshes in Nuvio (no reinstall
+  needed — manifest id unchanged, name + version update on refresh) →
+  on-device verdict. First auto cron run 19 Nov 10:30 IST.

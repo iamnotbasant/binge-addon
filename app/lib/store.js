@@ -1,4 +1,4 @@
-// Bharat Streams — catalog row store (design §6.3).
+// Binge Addon — catalog row store (design §6.3).
 // Rows live in Vercel Blob as one JSON file per catalog:
 //   catalogs/<catalog-id>.json   -> { metas: [...] }
 //   catalogs/_idmap.json         -> { "tmdb:123": "tt1234567", ... }
@@ -23,7 +23,7 @@ async function readCatalogFile(catalogId) {
 
   const token = process.env.BLOB_READ_WRITE_TOKEN;
   if (!token) {
-    console.log('[bharat-streams] catalog store: no BLOB_READ_WRITE_TOKEN, serving empty row');
+    console.log('[binge-addon] catalog store: no BLOB_READ_WRITE_TOKEN, serving empty row');
     return null;
   }
   try {
@@ -38,7 +38,7 @@ async function readCatalogFile(catalogId) {
     cache.set(key, { at: Date.now(), value });
     return value;
   } catch (e) {
-    console.log(`[bharat-streams] catalog store read failed for ${catalogId}: ${e.message}`);
+    console.log(`[binge-addon] catalog store read failed for ${catalogId}: ${e.message}`);
     return null;
   }
 }
@@ -70,7 +70,7 @@ async function readIdMap() {
     idMapCache = { at: Date.now(), value: json };
     return json;
   } catch (e) {
-    console.log(`[bharat-streams] idmap read failed: ${e.message}`);
+    console.log(`[binge-addon] idmap read failed: ${e.message}`);
     return {};
   }
 }

@@ -1,4 +1,4 @@
-// Bharat Streams — stream fan-out (design §7.1).
+// Binge Addon — stream fan-out (design §7.1).
 // v1 sources: Torrentio + Comet + HdHub. MediaFusion DROPPED (see DEPLOY.md).
 // Per-source timeout 3.5 s, hard overall deadline ~7 s returning partials.
 // A failing source never fails the whole response; outcomes are logged
@@ -50,7 +50,7 @@ function recordOutcome(name, ok) {
     b.failures += 1;
     if (b.failures >= CIRCUIT_BREAKER_FAILURES) {
       b.blockedUntil = Date.now() + CIRCUIT_BREAKER_MINUTES * 60 * 1000;
-      console.log(`[bharat-streams] circuit-breaker: ${name} blocked for ${CIRCUIT_BREAKER_MINUTES} min after ${b.failures} consecutive failures`);
+      console.log(`[binge-addon] circuit-breaker: ${name} blocked for ${CIRCUIT_BREAKER_MINUTES} min after ${b.failures} consecutive failures`);
     }
     breaker.set(name, b);
   }
@@ -64,11 +64,11 @@ async function fetchSource(source, type, id, opts = {}) {
   try {
     const res = await fetch(url, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'BingeAddon/1.0.0 (Stremio addon)' },
+      headers: { 'User-Agent': 'BingeAddon/1.0.1 (Stremio addon)' },
     });
     const latency = Date.now() - started;
     if (res.status !== 200) {
-      console.log(`[bharat-streams] source=${source.name} status=${res.status} count=0 latencyMs=${latency}`);
+      console.log(`[binge-addon] source=${source.name} status=${res.status} count=0 latencyMs=${latency}`);
       recordOutcome(source.name, false);
       return { name: source.name, ok: false, streams: [], status: res.status, latencyMs: latency };
     }
@@ -77,24 +77,24 @@ async function fetchSource(source, type, id, opts = {}) {
     try {
       json = JSON.parse(text);
     } catch (e) {
-      console.log(`[bharat-streams] source=${source.name} status=200 count=0 latencyMs=${latency} error=bad-json`);
+      console.log(`[binge-addon] source=${source.name} status=200 count=0 latencyMs=${latency} error=bad-json`);
       recordOutcome(source.name, false);
       return { name: source.name, ok: false, streams: [], status: 200, latencyMs: latency };
     }
     if (!json || !Array.isArray(json.streams)) {
-      console.log(`[bharat-streams] source=${source.name} status=200 count=0 latencyMs=${latency} error=bad-shape`);
+      console.log(`[binge-addon] source=${source.name} status=200 count=0 latencyMs=${latency} error=bad-shape`);
       recordOutcome(source.name, false);
       return { name: source.name, ok: false, streams: [], status: 200, latencyMs: latency };
     }
     const input = json.streams.slice(0, MAX_INPUT_PER_SOURCE);
     const { kept, dropped } = processSourceStreams(source.name, input, opts);
-    console.log(`[bharat-streams] source=${source.name} status=200 raw=${json.streams.length} kept=${kept.length} dropped=${JSON.stringify(dropped)} latencyMs=${latency}`);
+    console.log(`[binge-addon] source=${source.name} status=200 raw=${json.streams.length} kept=${kept.length} dropped=${JSON.stringify(dropped)} latencyMs=${latency}`);
     recordOutcome(source.name, true);
     return { name: source.name, ok: true, streams: kept, status: 200, latencyMs: latency };
   } catch (e) {
     const latency = Date.now() - started;
     const reason = e.name === 'AbortError' ? 'timeout' : String(e.message || e);
-    console.log(`[bharat-streams] source=${source.name} status=error count=0 latencyMs=${latency} error=${reason}`);
+    console.log(`[binge-addon] source=${source.name} status=error count=0 latencyMs=${latency} error=${reason}`);
     recordOutcome(source.name, false);
     return { name: source.name, ok: false, streams: [], status: 'error', latencyMs: latency };
   } finally {
@@ -111,8 +111,8 @@ async function fetchAllStreams(type, id, opts = {}) {
   for (const n of (opts.disabled || [])) disabled.add(n);
   const active = SOURCES.filter((s) => !disabled.has(s.name) && !isBlocked(s.name));
   for (const s of SOURCES) {
-    if (disabled.has(s.name)) console.log(`[bharat-streams] source=${s.name} skipped (DISABLE_SOURCES)`);
-    else if (isBlocked(s.name)) console.log(`[bharat-streams] source=${s.name} skipped (circuit-breaker)`);
+    if (disabled.has(s.name)) console.log(`[binge-addon] source=${s.name} skipped (DISABLE_SOURCES)`);
+    else if (isBlocked(s.name)) console.log(`[binge-addon] source=${s.name} skipped (circuit-breaker)`);
   }
   const collected = [];
   const pending = active.map((s) =>
@@ -122,9 +122,9 @@ async function fetchAllStreams(type, id, opts = {}) {
   await Promise.race([Promise.allSettled(pending), deadline]);
   const total = collected.reduce((n, r) => n + r.streams.length, 0);
   if (collected.length === 0) {
-    console.log(`[bharat-streams] stream ${type}/${id}: ALL sources failed or timed out`);
+    console.log(`[binge-addon] stream ${type}/${id}: ALL sources failed or timed out`);
   } else {
-    console.log(`[bharat-streams] stream ${type}/${id}: ${collected.length}/${SOURCES.length} sources answered, ${total} streams before merge`);
+    console.log(`[binge-addon] stream ${type}/${id}: ${collected.length}/${SOURCES.length} sources answered, ${total} streams before merge`);
   }
   return collected;
 }

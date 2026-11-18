@@ -1,4 +1,4 @@
-# Bharat Streams — app
+# Binge Addon — app
 
 Fresh Node.js + `stremio-addon-sdk` Stremio addon. No code copied from any
 existing addon.

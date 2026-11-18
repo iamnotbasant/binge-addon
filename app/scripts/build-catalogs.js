@@ -1,4 +1,4 @@
-// Bharat Streams — catalog builder (design §6.2, v2.0).
+// Binge Addon — catalog builder (design §6.2, v2.0).
 // Daily cron job: TMDB discover + detail -> prebuilt row JSON in
 // Vercel Blob (one file per catalog + id map). Keeps yesterday's files on
 // failure (writes only complete rows, and only after all fetches succeed).

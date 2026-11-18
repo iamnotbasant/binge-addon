@@ -1,4 +1,4 @@
-# Bharat Streams — Pre-test: bare stream-endpoint probes
+# Binge Addon — Pre-test: bare stream-endpoint probes
 
 Probed 2026-11-18 ~12:10–12:15 IST from this VM via curl (egress proxy
 `hatch-egress-proxy:3128`, browser UA `Chrome/120.0` on Windows, `--max-time 30`,

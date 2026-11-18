@@ -1,4 +1,4 @@
-// Bharat Streams — per-source parsing, filtering, sorting, formatting.
+// Binge Addon — per-source parsing, filtering, sorting, formatting.
 // Design §7.3–§7.6. Written against captured real responses (see
 // ../pretest/*.json): Torrentio flag-emoji language lines, HdHub
 // "[host] [size] filename\nHindi" descriptions, behaviorHints.filename
@@ -352,7 +352,7 @@ function formatStream(p) {
   }
   // bingeGroup so Nuvio's auto-play-next picks the same profile (§7.6).
   const primaryLang = p.langs.has('hindi') ? 'hindi' : p.langs.has('english') ? 'english' : 'other';
-  hints.bingeGroup = `bharat-streams:${res}:${primaryLang}`;
+  hints.bingeGroup = `binge-addon:${res}:${primaryLang}`;
 
   // notWebReady: only for URL streams, when non-HTTPS or non-MP4 (§7.6).
   if (s.url && hints.notWebReady === undefined) {

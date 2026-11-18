@@ -1,4 +1,6 @@
-# Bharat Streams — Design Draft (Elephant)
+# Binge Addon — Design Draft (Elephant)
+
+> **Renamed to Binge Addon in v1.0.1 (18 Nov 2026); "Bharat Streams" below is the old name, kept for history.** Manifest id `com.bharatstreams`, Vercel project `bharat-streams` and its URL are unchanged.
 
 **Status:** APPROVED v3 — basant delegated all decisions to Muse on 18 Nov 12:07 IST ('tu kar de sab kuch'); Phase 2 implementation in progress. v2.0 catalog rebuild (18 Nov 2026, see §14). Design: Elephant draft + 3 Goldfish reviews + live audit of basant's 10 installed Nuvio addons (18 Nov 2026).
 **Date:** 18 Nov 2026 (v1); revised 18 Nov 2026 (v2)

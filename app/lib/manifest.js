@@ -1,4 +1,4 @@
-// Bharat Streams — manifest definition (design §6.1, §6.4).
+// Binge Addon — manifest definition (design §6.1, §6.4).
 // 27 catalogs (v2.0), movie+series pairs adjacent. Manifest must stringify < 8 KB.
 
 // v2.0 (18 Nov 2026): basant's 25-item mega-list. The old v1.4 rows are
@@ -62,7 +62,7 @@ function catalogs() {
 
 const MANIFEST = {
   id: 'com.bharatstreams',
-  version: '1.0.0',
+  version: '1.0.1',
   name: 'Binge Addon',
   description:
     'Free Hindi-first Indian catalogs and streams. Trending India + Worldwide, Fresh Digital Drops, Latest Indian Movies & Web Series, Releasing Next 30 Days, Big Announcements 2026–2027, Now in Theatres, South Blockbusters, Dark Crime, Underrated Gems, Sci-Fi & Time Travel, Thrillers, Action, Mini-Series, Visual Spectacles, Anime and All-Time Classics, with Hindi 1080p streams first. This product uses the TMDB API but is not endorsed or certified by TMDB.',

@@ -1,4 +1,4 @@
-// Bharat Streams — admin config (v2.1.0).
+// Binge Addon — admin config (v2.1.0).
 // Config lives in Vercel Blob as config.json; the dashboard writes it,
 // the builder and the server read it. No secrets ever live here.
 // Shape:
@@ -88,7 +88,7 @@ async function readConfig() {
         if (res.ok) cfg = normalizeConfig(await res.json());
       }
     } catch (e) {
-      console.log(`[bharat-streams] config read failed, using defaults: ${e.message}`);
+      console.log(`[binge-addon] config read failed, using defaults: ${e.message}`);
     }
   }
   cache = { at: Date.now(), value: cfg };

@@ -7,10 +7,10 @@
   "description": "Binge Addon \u2014 free Hindi-first Stremio addon: Indian catalogs (TMDB) + filtered, sorted streams (Torrentio, Comet, HdHub).",
   "license": "MIT",
   "main": "index.js",
-  "name": "bharat-streams",
+  "name": "binge-addon",
   "scripts": {
     "build-catalogs": "node scripts/build-catalogs.js",
     "start": "node index.js"
   },
-  "version": "1.0.0"
+  "version": "1.0.1"
 }
