@@ -199,6 +199,31 @@ function isCam(text) {
   return CAM_RE.test(text);
 }
 
+// CAM kind for the last-resort fallback (v1.1.2, basant: "cam dikha do"):
+// best-first rank — TeleCine (0) > TeleSync/HDTS/HDTC (1) >
+// DVDScr/Screener/PreDVD (2) > CAM/HDCAM/CAMRip (3). Checked in rank
+// order so a row naming two kinds takes the better one.
+const CAM_KIND_RE = [
+  [/telecine/i, 'TeleCine', 0],
+  [/telesync/i, 'TeleSync', 1],
+  [/hdts/i, 'HDTS', 1],
+  [/hdtc/i, 'HDTC', 1],
+  [/dvdscr|dvd-scr/i, 'DVDScr', 2],
+  [/screener/i, 'Screener', 2],
+  [/\bscr\b/i, 'SCR', 2],
+  [/predvd|pre-dvd/i, 'PreDVD', 2],
+  [/hdcam/i, 'HDCAM', 3],
+  [/camrip/i, 'CAMRip', 3],
+  [/\bcam\b/i, 'CAM', 3],
+];
+
+function camKind(text) {
+  for (const [re, kind, rank] of CAM_KIND_RE) {
+    if (re.test(text)) return { kind, rank };
+  }
+  return { kind: 'CAM', rank: 3 };
+}
+
 // Language set from a block of text: flag emojis first, then word tokens.
 // Also recognises "Dual Audio"/"Multi" and bare "Original" qualifiers.
 function parseLanguages(text) {
@@ -517,11 +542,17 @@ function encodeRank(visual) {
 }
 
 // Full pipeline for one source's raw streams: parse -> filter -> sort.
-// Returns { kept: [parsed], dropped: { reason: count } }.
+// Returns { kept: [parsed], cam: [parsed], dropped: { reason: count } }.
+// CAM streams (v1.1.2 last-resort fallback): a row that fails ONLY the
+// CAM check is retained in `cam` — it must still pass the resolution cap
+// (checked above) and the language verdict, and the 0-seeder rule applies
+// to the cam list too. A 2160p CAM or a Tamil-only CAM stays dropped.
+// `cam` is sorted best-first: camRank, then compareParsed.
 function processSourceStreams(sourceName, rawStreams, opts = {}) {
   const parse = PARSERS[sourceName] || parseTorrentioLike;
   const dropped = { noPlayable: 0, over1080: 0, cam: 0, langDrop: 0 };
   const parsed = [];
+  let cam = [];
   // v2.1.0 dashboard knob: maxRes 720 also drops 1080p; default 1080
   // keeps the v1 hard cap (2160/1440 dropped, never 4K).
   const maxRes = opts.maxRes === 720 ? 720 : 1080;
@@ -532,7 +563,18 @@ function processSourceStreams(sourceName, rawStreams, opts = {}) {
     p.source = sourceName;
     p.raw = s;
     if (p.resolution === 2160 || p.resolution === 1440 || (maxRes === 720 && (p.resolution === 1080 || p.resolution === 1080.1))) { dropped.over1080++; continue; }
-    if (isCam(p.rawText)) { dropped.cam++; continue; }
+    if (isCam(p.rawText)) {
+      dropped.cam++;
+      const verdict = languageVerdict(p.langs);
+      if (verdict === 'drop') { dropped.langDrop++; continue; }
+      const { kind, rank } = camKind(p.rawText);
+      p.isCam = true;
+      p.camKind = kind;
+      p.camRank = rank;
+      p.unknownLang = verdict === 'unknown';
+      cam.push(p);
+      continue;
+    }
     const verdict = languageVerdict(p.langs);
     if (verdict === 'drop') { dropped.langDrop++; continue; }
     p.unknownLang = verdict === 'unknown';
@@ -549,8 +591,24 @@ function processSourceStreams(sourceName, rawStreams, opts = {}) {
     dropped.zeroSeeder = before - kept.length;
   }
 
+  // Same 0-seeder rule inside the cam pool: a 0-seeder CAM goes only when
+  // a seeded CAM exists in the same source batch.
+  const hasSeededCam = cam.some((p) => p.seeders !== null && p.seeders >= 1);
+  if (hasSeededCam) {
+    const before = cam.length;
+    cam = cam.filter((p) => p.seeders !== 0);
+    dropped.camZeroSeeder = before - cam.length;
+  }
+
   kept.sort(compareParsed);
-  return { kept, dropped };
+  cam.sort(compareCam);
+  return { kept, cam, dropped };
+}
+
+// Best-first CAM order: camRank, then the normal clean ranking.
+function compareCam(a, b) {
+  if (a.camRank !== b.camRank) return a.camRank - b.camRank;
+  return compareParsed(a, b);
 }
 
 function compareParsed(a, b) {
@@ -614,8 +672,15 @@ function formatStream(p) {
   const name = extractDisplayName(p.displayTitle) || p.displayTitle || 'Binge Addon';
 
   // Quality: resolution + source + HDR variant, each once.
+  // v1.1.2 CAM fallback: a CAM stream is marked IN the Quality line
+  // ("720p CAM TeleSync") AND gets a plain warning line, so it can never
+  // be mistaken for clean HD. Clean streams are never marked.
   const qualityBits = [];
   if (p.resolution) qualityBits.push(resLabel(p.resolution));
+  if (p.isCam) {
+    qualityBits.push('CAM');
+    if (p.camKind && !['CAM', 'HDCAM', 'CAMRip'].includes(p.camKind)) qualityBits.push(p.camKind);
+  }
   const source = ['BluRay', 'WEB-DL', 'WEBRip', 'HDRip', 'HDTV', 'Remux'].find((t) => p.visual.includes(t));
   if (source) qualityBits.push(source);
   for (const t of p.visual) {
@@ -642,6 +707,7 @@ function formatStream(p) {
 
   const lines = [];
   if (qualityBits.length) lines.push(`Quality: ${qualityBits.join(' ')}`);
+  if (p.isCam) lines.push('Note: CAM print — theatre recording');
   if (audioPart) lines.push(`Audio: ${audioPart}`);
   if (p.size) lines.push(`Size: ${p.size.value} ${p.size.unit}`);
 
@@ -679,6 +745,6 @@ function formatStream(p) {
 
 module.exports = {
   parseLanguages, parseAudioLanguages, parseChannels, parseResolution,
-  parseSeeders, languageVerdict, languageRank, compareParsed,
-  processSourceStreams, dedupe, formatStream, cleanTitle, extractDisplayName,
+  parseSeeders, languageVerdict, languageRank, compareParsed, compareCam,
+  camKind, processSourceStreams, dedupe, formatStream, cleanTitle, extractDisplayName,
 };

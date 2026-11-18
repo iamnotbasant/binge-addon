@@ -18,15 +18,15 @@ const fs = require('fs');
 const path = require('path');
 const { addonBuilder, getRouter } = require('stremio-addon-sdk');
 const { MANIFEST } = require('./lib/manifest');
-const { fetchAllStreams } = require('./lib/sources');
-const { dedupe, formatStream, compareParsed } = require('./lib/parse');
+const { fetchAllStreams, mergeStreamResults } = require('./lib/sources');
+const { formatStream } = require('./lib/parse');
 const { readCatalog, readCatalogMeta, readIdMap } = require('./lib/store');
 const { readConfig, writeConfig, effectiveCatalogs, normalizeConfig } = require('./lib/config');
 
 const STREAM_CAP = 40;
 const TMDB_IMG = 'https://image.tmdb.org/t/p';
 const ADDON_NAME = 'binge-addon';
-const VERSION = '1.1.1';
+const VERSION = '1.1.2';
 
 const builder = new addonBuilder(MANIFEST);
 
@@ -60,12 +60,11 @@ builder.defineStreamHandler(async ({ type, id }) => {
   }
   const maxRes = cfg.streams && cfg.streams.maxQuality === '720p' ? 720 : 1080;
   const results = await fetchAllStreams(type, id, { disabled, maxRes });
-  const merged = [];
-  for (const r of results) merged.push(...r.streams);
-  merged.sort(compareParsed);
-  const deduped = dedupe(merged).slice(0, STREAM_CAP);
-  const streams = deduped.map(formatStream);
-  console.log(`[binge-addon] stream ${type}/${id}: returning ${streams.length} streams`);
+  // v1.1.2: CAM streams appear ONLY when zero clean streams survive
+  // across ALL sources (mergeStreamResults enforces the rule).
+  const { parsed, usedCam } = mergeStreamResults(results, STREAM_CAP);
+  const streams = parsed.map(formatStream);
+  console.log(`[binge-addon] stream ${type}/${id}: returning ${streams.length} ${usedCam ? 'CAM fallback' : 'clean'} streams`);
   return { streams };
 });
 

@@ -6,7 +6,7 @@
 
 'use strict';
 
-const { processSourceStreams } = require('./parse');
+const { processSourceStreams, compareParsed, compareCam, dedupe } = require('./parse');
 
 const PER_SOURCE_TIMEOUT_MS = 3500;
 const OVERALL_DEADLINE_MS = 7000;
@@ -70,7 +70,7 @@ async function fetchSource(source, type, id, opts = {}) {
     if (res.status !== 200) {
       console.log(`[binge-addon] source=${source.name} status=${res.status} count=0 latencyMs=${latency}`);
       recordOutcome(source.name, false);
-      return { name: source.name, ok: false, streams: [], status: res.status, latencyMs: latency };
+      return { name: source.name, ok: false, streams: [], cam: [], status: res.status, latencyMs: latency };
     }
     const text = await res.text();
     let json;
@@ -79,24 +79,24 @@ async function fetchSource(source, type, id, opts = {}) {
     } catch (e) {
       console.log(`[binge-addon] source=${source.name} status=200 count=0 latencyMs=${latency} error=bad-json`);
       recordOutcome(source.name, false);
-      return { name: source.name, ok: false, streams: [], status: 200, latencyMs: latency };
+      return { name: source.name, ok: false, streams: [], cam: [], status: 200, latencyMs: latency };
     }
     if (!json || !Array.isArray(json.streams)) {
       console.log(`[binge-addon] source=${source.name} status=200 count=0 latencyMs=${latency} error=bad-shape`);
       recordOutcome(source.name, false);
-      return { name: source.name, ok: false, streams: [], status: 200, latencyMs: latency };
+      return { name: source.name, ok: false, streams: [], cam: [], status: 200, latencyMs: latency };
     }
     const input = json.streams.slice(0, MAX_INPUT_PER_SOURCE);
-    const { kept, dropped } = processSourceStreams(source.name, input, opts);
-    console.log(`[binge-addon] source=${source.name} status=200 raw=${json.streams.length} kept=${kept.length} dropped=${JSON.stringify(dropped)} latencyMs=${latency}`);
+    const { kept, cam, dropped } = processSourceStreams(source.name, input, opts);
+    console.log(`[binge-addon] source=${source.name} status=200 raw=${json.streams.length} kept=${kept.length} cam=${cam.length} dropped=${JSON.stringify(dropped)} latencyMs=${latency}`);
     recordOutcome(source.name, true);
-    return { name: source.name, ok: true, streams: kept, status: 200, latencyMs: latency };
+    return { name: source.name, ok: true, streams: kept, cam, status: 200, latencyMs: latency };
   } catch (e) {
     const latency = Date.now() - started;
     const reason = e.name === 'AbortError' ? 'timeout' : String(e.message || e);
     console.log(`[binge-addon] source=${source.name} status=error count=0 latencyMs=${latency} error=${reason}`);
     recordOutcome(source.name, false);
-    return { name: source.name, ok: false, streams: [], status: 'error', latencyMs: latency };
+    return { name: source.name, ok: false, streams: [], cam: [], status: 'error', latencyMs: latency };
   } finally {
     clearTimeout(timer);
   }
@@ -129,4 +129,23 @@ async function fetchAllStreams(type, id, opts = {}) {
   return collected;
 }
 
-module.exports = { fetchAllStreams, SOURCES, PER_SOURCE_TIMEOUT_MS, OVERALL_DEADLINE_MS };
+module.exports = { fetchAllStreams, mergeStreamResults, SOURCES, PER_SOURCE_TIMEOUT_MS, OVERALL_DEADLINE_MS };
+
+// Merge per-source results into the final stream list (v1.1.2 CAM rule):
+// clean streams from ALL sources first; the CAM pool is used ONLY when
+// the merged clean list is empty AFTER dedupe. Returns
+// { parsed: [parsed], usedCam: bool } — callers format + log the path.
+function mergeStreamResults(results, cap) {
+  const clean = [];
+  const cam = [];
+  for (const r of results || []) {
+    if (r.streams) clean.push(...r.streams);
+    if (r.cam) cam.push(...r.cam);
+  }
+  clean.sort(compareParsed);
+  const dedupedClean = dedupe(clean).slice(0, cap);
+  if (dedupedClean.length) return { parsed: dedupedClean, usedCam: false };
+  cam.sort(compareCam);
+  const dedupedCam = dedupe(cam).slice(0, cap);
+  return { parsed: dedupedCam, usedCam: true };
+}
