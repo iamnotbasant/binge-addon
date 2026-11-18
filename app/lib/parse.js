@@ -30,27 +30,33 @@ const FLAG_LANG = {
 };
 
 // Word / code tokens -> language. Matched on a lowercased, dot/underscore
-// normalised string with word boundaries.
+// normalised string with word boundaries on BOTH sides. The old patterns
+// had no leading boundary, so short codes fired inside other words:
+// "Movie" matched "vie" (Vietnamese!), "Animal" matched "mal"
+// (Malayalam), "Hotel" matched "tel" (Telugu), "Tiger"/"Danger" matched
+// "ger" (German), "within" matched "hin" (Hindi). A language word only
+// counts as a standalone token — "[Tam + Hin + Mal + Kan]" still matches
+// (the brackets/dots become spaces in the normalised text).
 const WORD_LANG = [
-  [/hindi|hin\b/, 'hindi'],
-  [/english|eng\b/, 'english'],
-  [/tamil|tam\b/, 'tamil'],
-  [/telugu|tel\b/, 'telugu'],
-  [/malayalam|mal\b/, 'malayalam'],
-  [/kannada|kan\b/, 'kannada'],
-  [/bengali|ben\b/, 'bengali'],
-  [/marathi|mar\b/, 'marathi'],
-  [/gujarati|guj\b/, 'gujarati'],
-  [/punjabi|pun\b/, 'punjabi'],
-  [/korean|kor\b/, 'korean'],
-  [/russian|rus\b/, 'russian'],
-  [/japanese|jpn\b/, 'japanese'],
-  [/chinese|chi\b|mandarin/, 'chinese'],
-  [/spanish|spa\b/, 'spanish'],
-  [/french|fre\b|fra\b/, 'french'],
-  [/german|ger\b|deu\b/, 'german'],
-  [/thai\b/, 'thai'],
-  [/vietnamese|vie\b/, 'vietnamese'],
+  [/\bhindi\b|\bhin\b/, 'hindi'],
+  [/\benglish\b|\beng\b/, 'english'],
+  [/\btamil\b|\btam\b/, 'tamil'],
+  [/\btelugu\b|\btel\b/, 'telugu'],
+  [/\bmalayalam\b|\bmal\b/, 'malayalam'],
+  [/\bkannada\b|\bkan\b/, 'kannada'],
+  [/\bbengali\b|\bben\b/, 'bengali'],
+  [/\bmarathi\b|\bmar\b/, 'marathi'],
+  [/\bgujarati\b|\bguj\b/, 'gujarati'],
+  [/\bpunjabi\b|\bpun\b/, 'punjabi'],
+  [/\bkorean\b|\bkor\b/, 'korean'],
+  [/\brussian\b|\brus\b/, 'russian'],
+  [/\bjapanese\b|\bjpn\b/, 'japanese'],
+  [/\bchinese\b|\bchi\b|\bmandarin\b/, 'chinese'],
+  [/\bspanish\b|\bspa\b/, 'spanish'],
+  [/\bfrench\b|\bfre\b|\bfra\b/, 'french'],
+  [/\bgerman\b|\bger\b|\bdeu\b/, 'german'],
+  [/\bthai\b/, 'thai'],
+  [/\bvietnamese\b|\bvie\b/, 'vietnamese'],
 ];
 
 // Languages whose presence alone gets a stream dropped (§7.4 step 3).
@@ -64,8 +70,17 @@ const DROP_LANGS = new Set([
 // without flag-emoji support as the bare regional-indicator letters
 // "IN"+"GB" — the "INGB" in the reported "DD+ DD AAC INGB" line — so
 // the description now spells the languages out ("Hindi + English").
-// FLAG_LANG (input parsing of source titles) is untouched.
-const LANG_LABEL = { hindi: 'Hindi', english: 'English' };
+// FLAG_LANG (input parsing of source titles) is untouched. Extended to
+// every language WORD_LANG can detect: the locked format shows the full
+// audio set ("Hindi + Tamil + Telugu"), never just Hindi/English.
+const LANG_LABEL = {
+  hindi: 'Hindi', english: 'English', tamil: 'Tamil', telugu: 'Telugu',
+  malayalam: 'Malayalam', kannada: 'Kannada', bengali: 'Bengali',
+  marathi: 'Marathi', gujarati: 'Gujarati', punjabi: 'Punjabi',
+  korean: 'Korean', russian: 'Russian', japanese: 'Japanese',
+  chinese: 'Chinese', spanish: 'Spanish', french: 'French',
+  german: 'German', thai: 'Thai', vietnamese: 'Vietnamese',
+};
 
 // ---------------------------------------------------------------------------
 // Field extraction
@@ -99,8 +114,14 @@ function sizeBytes(size) {
   return size.unit === 'GB' ? size.value * 1e9 : size.value * 1e6;
 }
 
-const AUDIO_TAGS = ['Atmos', 'TrueHD', 'DTS-HD MA', 'DTS', 'DD+', 'DD', 'AAC', 'FLAC', 'Opus'];
-const VISUAL_TAGS = ['HDR10+', 'HDR10', 'Dolby Vision', 'DV', 'HDR', 'BluRay', 'WEB-DL', 'WEBRip'];
+const AUDIO_TAGS = ['Atmos', 'TrueHD', 'DTS-HD MA', 'DTS', 'DD+', 'DD', 'AAC', 'FLAC', 'Opus', 'AC3', 'EAC3'];
+// HDRip/HDTV are real source labels ("1080p HDRip" is the locked Quality
+// example) — they were missing, so those streams showed no source at all.
+// HDTV also fills the ENCODE_RANK slot that already listed it.
+// 'Remux' has NO TAG_RE entry on purpose: findTags falls back to a plain
+// case-insensitive substring test for it, and "BDRemux" (no word boundary
+// before "Remux") must still match — "remux" only ever means a remux.
+const VISUAL_TAGS = ['HDR10+', 'HDR10', 'Dolby Vision', 'DV', 'HDR', 'BluRay', 'WEB-DL', 'WEBRip', 'HDRip', 'HDTV', 'Remux'];
 const ENCODE_TAGS = ['HEVC', 'x265', 'AVC', 'x264', '10bit'];
 
 function findTags(text, tags) {
@@ -115,6 +136,12 @@ function findTags(text, tags) {
     if (hit) found.push(tag === 'Dolby Vision' ? 'DV' : tag);
   }
   let out = [...new Set(found)];
+  // AC3 is Dolby Digital and EAC3 is Dolby Digital Plus — normalise to
+  // the DD/DD+ names before subsumption (the "AC3" in "x264 AC3-LOKI"
+  // previously vanished from the Audio line entirely).
+  if (out.includes('EAC3')) out = out.map((t) => (t === 'EAC3' ? 'DD+' : t));
+  if (out.includes('AC3')) out = out.map((t) => (t === 'AC3' ? 'DD' : t));
+  out = [...new Set(out)];
   // Keep only the most specific variant when several overlap:
   // "DTS-HD MA" subsumes "DTS", "DD+" (incl. "DDP") subsumes "DD",
   // "HDR10+"/"HDR10" subsume plain "HDR".
@@ -153,6 +180,12 @@ const TAG_RE = {
   AVC: /(?<![A-Za-z])avc(?![A-Za-z])/i,
   x264: /(?<![A-Za-z])x264(?![A-Za-z])/i,
   '10bit': /(?<![A-Za-z])10-?bit(?![A-Za-z])/i,
+  HDRip: /(?<![A-Za-z])hdrip(?![A-Za-z])/i,
+  HDTV: /(?<![A-Za-z])hdtv(?![A-Za-z])/i,
+  // EAC3 checked before AC3 by the lookbehind: in "EAC3" the "AC3" is
+  // preceded by "E" (a letter), so the AC3 pattern cannot fire inside it.
+  AC3: /(?<![A-Za-z])ac3(?![A-Za-z])/i,
+  EAC3: /(?<![A-Za-z])eac3(?![A-Za-z])/i,
 };
 
 // Screener / pre-release / cam sources. The old \b...\b list missed every
@@ -185,6 +218,46 @@ function parseLanguages(text) {
   return langs;
 }
 
+// Display audio languages (locked format, v1.1.1): ONE language set per
+// stream, shown once, in the Audio line. The Torrentio/Comet flag-emoji
+// line is the per-file audio signal and WINS over language words in the
+// release filename — a "Telugu HQ HDRip" whose flag line says 🇬🇧/🇮🇳
+// shows "Hindi + English", never a second contradictory set. With no
+// flags (HdHub), the explicit language words in the lang lines/filename
+// are the only signal. Pseudo-tags (dual/multi/original) never display.
+// NOTE: p.langs (filtering/sorting) still uses the merged set above;
+// this is display-only, so ranking behaviour is unchanged.
+function parseAudioLanguages(rawText, cleanText) {
+  const flags = new Set();
+  for (const [flag, lang] of Object.entries(FLAG_LANG)) {
+    if ((rawText || '').includes(flag)) flags.add(lang);
+  }
+  if (flags.size) return flags;
+  const langs = new Set();
+  const norm = (cleanText || '').toLowerCase().replace(/[._\-+]+/g, ' ');
+  for (const [re, lang] of WORD_LANG) {
+    if (re.test(norm)) langs.add(lang);
+  }
+  return langs;
+}
+
+// Channel layout ("5.1", "7.1", "2.0") from the release text. The size
+// guard (?!\s*(GB|MB)) keeps "2.5GB"/"1.6GB" sizes out; the (?!\d) guard
+// keeps "1.57 GB" decimals out.
+const CHANNELS_RE = /([1-7]\.[01])(?!\d)(?!\s*(?:GB|MB)\b)/;
+function parseChannels(text) {
+  const m = (text || '').match(CHANNELS_RE);
+  return m ? m[1] : null;
+}
+
+// Hindi first, English second, the rest alphabetical — deterministic, so
+// the same stream always renders the same Audio line.
+function orderLangs(langs) {
+  const real = [...langs].filter((l) => LANG_LABEL[l]);
+  const rank = (l) => (l === 'hindi' ? 0 : l === 'english' ? 1 : 2);
+  return real.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+}
+
 // ---------------------------------------------------------------------------
 // Per-source parsing
 // ---------------------------------------------------------------------------
@@ -203,8 +276,13 @@ function parseTorrentioLike(stream) {
   const fromFile = cleanTitle(filename);
   const fromTitle = cleanTitle(firstLine(title));
   const displayTitle = isBareDomainTitle(fromFile) ? (fromTitle || fromFile) : (fromFile || fromTitle);
+  // Word-fallback language detection runs on the site-stripped text, so
+  // a "www.1TamilMV.io" prefix can never donate a Tamil audio tag.
+  const cleanText = [fromFile, fromTitle].filter(Boolean).join('\n');
   return {
     langs: parseLanguages(parseText),
+    audioLangs: parseAudioLanguages(parseText, cleanText),
+    channels: parseChannels(parseText),
     resolution: parseResolution(parseText),
     seeders: parseSeeders(title),
     size: parseSize(title),
@@ -228,12 +306,16 @@ function parseHdHub(stream) {
   // "[PixelDrain] [💾 2GB] Dangal.2016...mkv". The old filename regex
   // started matching after the 💾 (not in its char class), leaving a
   // junk "2GB] Dangal..." display title. Strip host/size groups first.
+  // "[10Gbps Download Only]" is the same kind of host label — without it,
+  // TRUNCATED descriptions (no .mkv at the end, so the filename regex
+  // below cannot match) kept the whole label in the display title:
+  // "[10Gbps Download Only] [💾 34.07 GB] Interstellar (2014)".
   for (;;) {
     const m = fileLine.match(/^\s*\[([^\]]*)\]\s*/);
     if (!m) break;
     const inner = m[1];
     if (/💾/.test(inner) || /^\s*[\d.]+\s*(GB|MB)\s*$/i.test(inner)
-      || /pixeldrain|gdrive|mega|filepress|drive/i.test(inner)) {
+      || /pixeldrain|gdrive|mega|filepress|drive|download|upload|gbps|mbps|streaming/i.test(inner)) {
       fileLine = fileLine.slice(m[0].length);
     } else break;
   }
@@ -243,8 +325,11 @@ function parseHdHub(stream) {
   const filename = fileMatch ? fileMatch[1] : fileLine;
   const langLines = lines.slice(1).join(' ');
   const parseText = [filename, langLines, name].filter(Boolean).join('\n');
+  const cleanText = [cleanTitle(filename), langLines, name].filter(Boolean).join('\n');
   return {
     langs: parseLanguages(parseText),
+    audioLangs: parseAudioLanguages(parseText, cleanText),
+    channels: parseChannels(parseText),
     resolution: parseResolution(parseText),
     seeders: null, // HTTP direct links carry no seeders
     size: parseSize(desc) || (stream.behaviorHints && stream.behaviorHints.videoSize
@@ -350,6 +435,38 @@ function cleanTitle(text) {
   t = t.replace(/\s*\{[^}]*\}\s*$/g, '').trim();
   t = t.replace(/[-–—]+\s*$/, '').trim();
   return t;
+}
+
+// Locked display name (v1.1.1, basant-approved): title + year ONLY —
+// "Jailer 2 (2026)" — plus the SxxExx tag for series ("Mirzapur S01E01").
+// Everything after the year (resolution, source, codec, size, release
+// group, junk) is cut: those signals live in the labeled lines. A
+// repeated year ("Interstellar 2014 2014") collapses — the title is cut
+// at the FIRST year. No year and no series tag: cut at the first tech
+// token instead. Returns '' when nothing usable remains; the caller
+// falls back to the full cleaned title.
+function extractDisplayName(cleaned) {
+  const t = (cleaned || '').trim();
+  if (!t) return '';
+  const series = t.match(/\bS(\d{1,2})E(\d{1,2})\b/i);
+  const year = t.match(/\b(19|20)\d\d\b/);
+  let cut = t.length;
+  if (year) cut = Math.min(cut, year.index);
+  if (series) cut = Math.min(cut, series.index);
+  if (!year && !series) {
+    const tech = t.match(/\b(480|720|1080|2160)p?\b|\b(bluray|web-dl|webrip|hdrip|hdtv|hevc|x264|x265|avc|aac|dd\+?|dts|atmos|truehd|ac3|eac3)\b/i);
+    if (tech) cut = Math.min(cut, tech.index);
+  }
+  let title = t.slice(0, cut);
+  // "Jailer-2" -> "Jailer 2" (hyphen between word and digit is a
+  // separator in release names); "Spider-Man" keeps its hyphen.
+  title = title.replace(/([A-Za-z])-(\d)/g, '$1 $2').replace(/(\d)-([A-Za-z])/g, '$1 $2');
+  title = title.replace(/[\s\-–—:([{]+$/g, '').replace(/\s+/g, ' ').trim();
+  if (!title) return '';
+  let out = title;
+  if (year) out += ` (${year[0]})`;
+  if (series) out += ` S${String(series[1]).padStart(2, '0')}E${String(series[2]).padStart(2, '0')}`;
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -477,18 +594,56 @@ function resLabel(res) {
   return 'Unknown';
 }
 
+// Locked display format (v1.1.1, basant-approved Telegram-channel style):
+//   Name:    "Jailer 2 (2026)"                 (title + year only)
+//   Quality: 1080p HDRip                       (resolution + source + HDR)
+//   Audio:   Hindi + English | DD+ 5.1         (languages | codec + channels)
+//   Size:    1.57 GB                           (size once)
+// Each signal appears exactly once, in its own labeled line; a line is
+// omitted entirely when its signal is genuinely missing — never invented.
+// Dropped from display by design (see the before/after table in
+// tests/test-stream-format.js): video encode (HEVC/x264 — the badge pack
+// already dropped the encoder group in v1.0.6 for the same reason),
+// secondary audio tracks (only the primary codec shows — the locked
+// example shows "DD+ 5.1" for a stream that also carries AAC),
+// release groups, bitrates (192Kbps), ESub/ORG/HQ/TRUE/LiNE/HC junk,
+// the filename's rounded size (the 💾 size is authoritative).
 function formatStream(p) {
   const s = p.raw;
   const res = resLabel(p.resolution);
-  const visualBits = [...p.visual, ...p.encode].filter(Boolean);
-  let line1 = visualBits.length ? `${res} | ${visualBits.join(' ')}` : res;
-  if (p.size) line1 += ` 💾 ${p.size.value}${p.size.unit}`;
+  const name = extractDisplayName(p.displayTitle) || p.displayTitle || 'Binge Addon';
 
-  const langLabels = [...p.langs].filter((l) => LANG_LABEL[l]).map((l) => LANG_LABEL[l]);
-  const line2bits = [];
-  if (p.audio.length) line2bits.push(p.audio.join(' '));
-  if (langLabels.length) line2bits.push(langLabels.join(' + '));
-  const line2 = line2bits.length ? `🔊 ${line2bits.join(' ')}` : '';
+  // Quality: resolution + source + HDR variant, each once.
+  const qualityBits = [];
+  if (p.resolution) qualityBits.push(resLabel(p.resolution));
+  const source = ['BluRay', 'WEB-DL', 'WEBRip', 'HDRip', 'HDTV', 'Remux'].find((t) => p.visual.includes(t));
+  if (source) qualityBits.push(source);
+  for (const t of p.visual) {
+    if (t === 'HDR10+' || t === 'HDR10' || t === 'HDR') qualityBits.push(t);
+    else if (t === 'DV') qualityBits.push('Dolby Vision');
+  }
+
+  // Audio: languages first, then the PRIMARY codec + channels. findTags
+  // returns codecs in priority order (Atmos > TrueHD > DTS-HD MA > DTS >
+  // DD+ > DD > AAC...), so audio[0] is the best track; secondary tracks
+  // ("DD+ 5.1 & AAC") are dropped — the locked example shows exactly one
+  // codec ("DD+ 5.1") for a stream that also carries AAC. Languages come
+  // from p.audioLangs — the single flag-priority set — so the title can
+  // never contradict the line.
+  const audioLangs = p.audioLangs
+    || new Set([...p.langs].filter((l) => LANG_LABEL[l]));
+  const langPart = orderLangs(audioLangs).map((l) => LANG_LABEL[l]).join(' + ');
+  let codecPart = '';
+  if (p.audio.length) {
+    codecPart = p.audio[0];
+    if (p.channels) codecPart += ` ${p.channels}`;
+  }
+  const audioPart = [langPart, codecPart].filter(Boolean).join(' | ');
+
+  const lines = [];
+  if (qualityBits.length) lines.push(`Quality: ${qualityBits.join(' ')}`);
+  if (audioPart) lines.push(`Audio: ${audioPart}`);
+  if (p.size) lines.push(`Size: ${p.size.value} ${p.size.unit}`);
 
   const hints = {};
   if (s.behaviorHints) {
@@ -509,8 +664,8 @@ function formatStream(p) {
   }
 
   const out = {
-    name: p.displayTitle || 'Binge Addon',
-    description: line2 ? `${line1}\n${line2}` : line1,
+    name,
+    description: lines.join('\n'),
     behaviorHints: hints,
   };
   if (s.infoHash) {
@@ -523,6 +678,7 @@ function formatStream(p) {
 }
 
 module.exports = {
-  parseLanguages, parseResolution, parseSeeders, languageVerdict,
-  languageRank, compareParsed, processSourceStreams, dedupe, formatStream, cleanTitle,
+  parseLanguages, parseAudioLanguages, parseChannels, parseResolution,
+  parseSeeders, languageVerdict, languageRank, compareParsed,
+  processSourceStreams, dedupe, formatStream, cleanTitle, extractDisplayName,
 };

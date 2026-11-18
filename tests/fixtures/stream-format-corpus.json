@@ -1,0 +1,346 @@
+[
+  {
+    "id": "jailer2-torrentio-1",
+    "source": "torrentio",
+    "note": "the screenshot stream",
+    "raw": {
+      "name": "Torrentio\n1080p",
+      "title": "Jailer 2 (2026) 1080p Telugu HQ HDRip - HEVC - (DD+5.1 - 192Kbps & AAC) - 1.6GB - ESub\n👤 8236 💾 1.57 GB ⚙️ EXT\n🇬🇧 / 🇮🇳",
+      "infoHash": "6ff50fe4313e6b0adc6f0370ddeae17e8a6930f1",
+      "fileIdx": 0,
+      "behaviorHints": {
+        "bingeGroup": "torrentio|1080p|HDRip|hevc",
+        "filename": "www.5MovieRulz.company - Jailer 2 (2026) 1080p Telugu HQ HDRip - HEVC - (DD+5.1 - 192Kbps & AAC) - 1.6GB - ESub.mkv"
+      }
+    }
+  },
+  {
+    "id": "jailer2-torrentio-2",
+    "source": "torrentio",
+    "note": "Telugu WEB-DL, DDP 640Kbps",
+    "raw": {
+      "name": "Torrentio\n1080p",
+      "title": "Jailer 2 (2026) 1080p Telugu TRUE WEB-DL - AVC - (DD+5.1 - 640Kbps & AAC) - 2.9GB - ESub\n👤 7287 💾 2.99 GB ⚙️ EXT\n🇬🇧 / 🇮🇳",
+      "infoHash": "29531c60730fd52a8241907bf01fd1b20020f557",
+      "fileIdx": 0,
+      "behaviorHints": {
+        "bingeGroup": "torrentio|1080p|WEB-DL|avc",
+        "filename": "www.5MovieRulz.company - Jailer 2 (2026) 1080p Telugu TRUE WEB-DL - AVC - (DD+5.1 - 640Kbps & AAC) - 2.9GB - ESub.mkv"
+      }
+    }
+  },
+  {
+    "id": "jailer2-torrentio-3",
+    "source": "torrentio",
+    "note": "Telugu-only HDRip, AAC",
+    "raw": {
+      "name": "Torrentio\n1080p",
+      "title": "Jailer 2 (2026) 1080p Telugu HDRip - x264 - AAC - 2.8GB\n👤 5393 💾 2.91 GB ⚙️ EXT\n🇮🇳",
+      "infoHash": "ae8759a3c4a725864e5fbc81911c657f06e2d433",
+      "fileIdx": 0,
+      "behaviorHints": {
+        "bingeGroup": "torrentio|1080p|HDRip|x264",
+        "filename": "www.5MovieRulz.company - Jailer 2 (2026) 1080p Telugu HDRip - x264 - AAC - 2.8GB.mkv"
+      }
+    }
+  },
+  {
+    "id": "jailer2-torrentio-4",
+    "source": "torrentio",
+    "note": "Tamil release, flags Hindi+English",
+    "raw": {
+      "name": "Torrentio\n1080p",
+      "title": "Jailer 2 (2026) Tamil TRUE WEB-DL - 1080p - AVC - (DD+5.1 - 640Kbps & AAC) - 2.9GB - ESub\n👤 3744 💾 2.99 GB ⚙️ EXT\n🇬🇧 / 🇮🇳",
+      "infoHash": "b1eab606eebc302a3dacbed0054ca37316aa2353",
+      "fileIdx": 0,
+      "behaviorHints": {
+        "bingeGroup": "torrentio|1080p|WEB-DL|avc",
+        "filename": "www.1TamilMV.io - Jailer 2 (2026) Tamil TRUE WEB-DL - 1080p - AVC - (DD+5.1 - 640Kbps & AAC) - 2.9GB - ESub.mkv"
+      }
+    }
+  },
+  {
+    "id": "jailer2-hdhub-1",
+    "source": "hdhub",
+    "note": "HdHub multi-audio WEB-DL",
+    "raw": {
+      "name": "HdHub 1080p",
+      "description": "[FSLv2] [💾 12.75 GB] Jailer-2.2026.1080p.AMZN.WEB-DL.Hindi-Multi.DDP5.1.ESub.x264-HDHub4u.Ms.mkv\nHindi\nFSLv2 | HdHub",
+      "url": "https://1e944b5039411ad4aa3552df9a08743d.r2.cloudflarestorage.com/hub/Jailer-2.2026.1080p.AMZN.WEB-DL.Hindi-Multi.DDP5.1.ESub.x264-HDHub4u.Ms.mkv?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=7803139bd4211b35657cd27a635eb75b%2F20261118%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261118T035034Z&X-Amz-Expires=18000&X-Amz-SignedHeaders=host&response-content-disposition=attachment%3B%20filename%3D%22Jailer-2.2026.1080p.AMZN.WEB-DL.Hindi-Multi.DDP5.1.ESub.x264-HDHub4u.Ms.mkv%22&X-Amz-Signature=1837b31f5cad9793bcf9d6af2f0d538c241015e9aecb98fd9671f5e35bc0c064",
+      "behaviorHints": {
+        "notWebReady": true,
+        "videoSize": 13690208256
+      }
+    }
+  },
+  {
+    "id": "jailer2-hdhub-2",
+    "source": "hdhub",
+    "note": "HdHub 4-language HDRip",
+    "raw": {
+      "name": "HdHub 1080p",
+      "description": "[FSL] [💾 11.95 GB] Jailer-2.2026.HQ.1080p.HDRip.Hindi-TEL-KAN-LiNE-Tamil.ORG.HC-ESub.x264-HDHub4u.Ag.mkv\nHDR | Hindi\nFSL | HdHub",
+      "url": "https://cee4a5cf74935f8a680f710564b4282f.r2.cloudflarestorage.com/hub/fda0de7b77372cbfcb7c81ab16589041?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=5452c5f4fbff4e8ca3dfc5058fc64dd7%2F20261118%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261118T035042Z&X-Amz-Expires=28800&X-Amz-SignedHeaders=host&response-content-disposition=attachment%3B%20filename%3D%22Jailer-2.2026.HQ.1080p.HDRip.Hindi-TEL-KAN-LiNE-Tamil.ORG.HC-ESub.x264-HDHub4u.Ag.mkv%22&X-Amz-Signature=8de7c9c8ff149f421b52f15cc5c0a27d73e0cbddb8fe7688041984a8e2996808",
+      "behaviorHints": {
+        "notWebReady": true,
+        "videoSize": 12831214797
+      }
+    }
+  },
+  {
+    "id": "dangal-torrentio-1",
+    "source": "torrentio",
+    "note": "32GB Rutracker remux, flags GB/RU/IN",
+    "raw": {
+      "name": "Torrentio\n1080p",
+      "title": "Дангал / Слово борца / Борьба / दंगल / Dangal [2016 BDRemux 1080p] Dub (Кинопоиск HD) + MVO (FocusStudio) + MVO (Honey&Haseena) + Sub Rus + Original Hindi + Comments Eng\n👤 19 💾 32.18 GB ⚙️ Rutracker\n🇬🇧 / 🇷🇺 / 🇮🇳",
+      "infoHash": "d6c571540279246e268caca2a1679cef7b5568de",
+      "fileIdx": 0,
+      "behaviorHints": {
+        "bingeGroup": "torrentio|1080p|BluRay REMUX|h264",
+        "filename": "Dangal (2016).1080p.h264 {imdb-tt5074352}.mkv"
+      },
+      "sources": [
+        "tracker:http://bt2.t-ru.org/ann?magnet",
+        "dht:d6c571540279246e268caca2a1679cef7b5568de",
+        "tracker:udp://tracker.opentrackr.org:1337/announce",
+        "tracker:udp://open.stealth.si:80/announce",
+        "tracker:udp://tracker.torrent.eu.org:451/announce",
+        "tracker:udp://open.demonii.com:1337/announce",
+        "tracker:udp://open.tracker.cl:1337/announce",
+        "tracker:udp://exodus.desync.com:6969/announce",
+        "tracker:http://tracker.qu.ax:6969/announce",
+        "tracker:udp://tracker.ducks.party:1984/announce",
+        "tracker:udp://tracker.bittor.pw:1337/announce",
+        "tracker:udp://tracker.tryhackx.org:6969/announce",
+        "tracker:udp://tracker.corpscorp.online:80/announce",
+        "tracker:udp://tracker.nyaa.vc:6969/announce",
+        "tracker:udp://tracker-udp.gbitt.info:80/announce",
+        "tracker:udp://explodie.org:6969/announce",
+        "tracker:udp://tracker.gmi.gd:6969/announce",
+        "tracker:http://tracker.dler.org:6969/announce",
+        "tracker:udp://tracker2.dler.org:80/announce",
+        "tracker:http://tracker.dler.com:6969/announce",
+        "tracker:http://tracker.renfei.net:8080/announce",
+        "tracker:udp://tracker.peerfect.org:6969/announce",
+        "tracker:udp://opentor.net:6969",
+        "tracker:http://bt.t-ru.org/ann?magnet",
+        "tracker:http://bt3.t-ru.org/ann?magnet",
+        "tracker:http://bt4.t-ru.org/ann?magnet"
+      ]
+    }
+  },
+  {
+    "id": "dangal-torrentio-2",
+    "source": "torrentio",
+    "note": "BluRay x264, AC3 audio",
+    "raw": {
+      "name": "Torrentio\n1080p",
+      "title": "Dangal.2016.Hindi.1080p.BluRay.x264.AC3-LOKI-M2Tv\n👤 18 💾 2.7 GB ⚙️ ThePirateBay\n🇮🇳",
+      "infoHash": "010b7c3a3e961a8dcee86e5a9cf28ec34c226733",
+      "behaviorHints": {
+        "bingeGroup": "torrentio|1080p|BluRay|x264"
+      }
+    }
+  },
+  {
+    "id": "dangal-torrentio-3",
+    "source": "torrentio",
+    "note": "BluRay x265 Atmos 10bit",
+    "raw": {
+      "name": "Torrentio\n1080p",
+      "title": "Dangal (2016) (1080p BluRay x265 10bit EAC3 7.1 Atmos SAMPA) [QxR]\nDangal (2016) (1080p BluRay x265 SAMPA).mkv\n👤 4 💾 7.64 GB ⚙️ 1337x\n🇮🇳",
+      "infoHash": "e93360776389078960135847da1d525a3c9d890d",
+      "fileIdx": 0,
+      "behaviorHints": {
+        "bingeGroup": "torrentio|1080p|BluRay|x265|10bit",
+        "filename": "Dangal (2016) (1080p BluRay x265 SAMPA).mkv"
+      }
+    }
+  },
+  {
+    "id": "dangal-torrentio-4",
+    "source": "torrentio",
+    "note": "BluRay x264 DD 5.1, ESubs",
+    "raw": {
+      "name": "Torrentio\n1080p",
+      "title": "Dangal (2016) Hindi BluRay 1080p x264 DD 5.1 ESubs - Hon3y\n👤 4 💾 4.38 GB ⚙️ ThePirateBay\n🇮🇳",
+      "infoHash": "c5601a9dc33fae2bdcb26b56d8e0d57edadefbc8",
+      "behaviorHints": {
+        "bingeGroup": "torrentio|1080p|BluRay|x264"
+      }
+    }
+  },
+  {
+    "id": "dangal-hdhub-1",
+    "source": "hdhub",
+    "note": "HdHub HEVC BluRay",
+    "raw": {
+      "name": "HdHub 1080p",
+      "description": "[PixelDrain] [💾 2GB] Dangal.2016.1080p.HEVC.Hindi.BluRay.5.1.ESub.x265-HDHub4u.Ms.mkv\nHindi\npixeldrain | HdHub",
+      "url": "https://pixeldrain.dev/api/file/wktKVddJ?download",
+      "behaviorHints": {
+        "notWebReady": true,
+        "videoSize": 2147483648
+      }
+    }
+  },
+  {
+    "id": "3idiots-torrentio-1",
+    "source": "torrentio",
+    "note": "BluRay x264 Hindi AAC",
+    "raw": {
+      "name": "Torrentio\n1080p",
+      "title": "3 Idiots 2009 1080p BluRay x264 Hindi AAC - Ozlem\n👤 118 💾 2.51 GB ⚙️ ThePirateBay\n🇮🇳",
+      "infoHash": "8f50891fcc8ac9b8c0127803f6f30c4f8d611311",
+      "fileIdx": 0,
+      "behaviorHints": {
+        "bingeGroup": "torrentio|1080p|BluRay|x264",
+        "filename": "3 Idiots 2009 1080p BluRay x264 Hindi AAC - Ozlem.mp4"
+      }
+    }
+  },
+  {
+    "id": "3idiots-torrentio-2",
+    "source": "torrentio",
+    "note": "bare filename, no tech tokens",
+    "raw": {
+      "name": "Torrentio\n1080p",
+      "title": "3 Idiots (2009) [BDrip 1080p - H264 - Hin Aac - Sub Ita Eng] TN\n👤 36 💾 2.49 GB ⚙️ ThePirateBay\n🇬🇧 / 🇮🇹 / 🇮🇳",
+      "infoHash": "2548718d1f637de10ce0248c0507582a450b1565",
+      "fileIdx": 0,
+      "behaviorHints": {
+        "bingeGroup": "torrentio|1080p|BDRip|h264",
+        "filename": "3 Idiots (2009).mkv"
+      }
+    }
+  },
+  {
+    "id": "3idiots-torrentio-3",
+    "source": "torrentio",
+    "note": "x265 HEVC 10bit AAC 7.1, flags CN/IN",
+    "raw": {
+      "name": "Torrentio\n1080p",
+      "title": "3 Idiots (2009) (1080p BluRay x265 HEVC 10bit AAC 7.1 Hindi Chinese Natty) [QxR]\n👤 15 💾 4.17 GB ⚙️ 1337x\n🇨🇳 / 🇮🇳",
+      "infoHash": "e6c8415447bec99574b8a530bdeb37e2c626628a",
+      "fileIdx": 11,
+      "behaviorHints": {
+        "bingeGroup": "torrentio|1080p|BluRay|hevc|10bit",
+        "filename": "3 Idiots (2009) (1080p BluRay x265 Natty).mkv"
+      }
+    }
+  },
+  {
+    "id": "3idiots-torrentio-4",
+    "source": "torrentio",
+    "note": "DTS-HDMA 7.1",
+    "raw": {
+      "name": "Torrentio\n1080p",
+      "title": "3 Idiots 2009 Hindi 1080p BluRay x264 DTS-HDMA 7.1 - Hon3yHD\n👤 14 💾 15.02 GB ⚙️ 1337x\n🇮🇳",
+      "infoHash": "9db728a1970eb2f84cec01565c465ef8cc8c9a1e",
+      "fileIdx": 0,
+      "behaviorHints": {
+        "bingeGroup": "torrentio|1080p|BluRay|x264",
+        "filename": "3.Idiots.2009.Hindi.1080p.BluRay.x264.DTS-HDMA.7.1.-.Hon3yHD.mkv"
+      }
+    }
+  },
+  {
+    "id": "3idiots-hdhub-1",
+    "source": "hdhub",
+    "note": "HdHub DD 5.1",
+    "raw": {
+      "name": "HdHub 1080p",
+      "description": "[10Gbps Download Only] [💾 3.3GB] 3.Idiots.2009.1080p.BluRay.Hindi.DD.5.1.x264.ESubs.mkv\nHindi\n10Gbps Download Only | HdHub",
+      "url": "https://pixel.hubcloud.mov/?id=1527ad39200911366cdf85957d3c250e0a7b8d51390da574f2a89a593f91d0f1424cf0bd6c970d0f98bef5df3d0790979213c61c2c282dcb4cce3af2c34f5abd232d38cc3a4a64f289e857dcc42ca711a19a49c89dc925f71cf1a0fe673d985c::6774bf9eb98cc96c1c9cf2a3834d027e",
+      "behaviorHints": {
+        "notWebReady": true,
+        "videoSize": 3543348019
+      }
+    }
+  },
+  {
+    "id": "interstellar-torrentio-1",
+    "source": "torrentio",
+    "note": "duplicated year 2014 2014",
+    "raw": {
+      "name": "Torrentio\n1080p",
+      "title": "Imdb top 263 movies hindi english gdrive\nInterstellar.2014.2014.1080p.BluRay.x264.YIFY.mp4\n👤 89 💾 2.26 GB ⚙️ 1337x\n🇬🇧 / 🇮🇳",
+      "infoHash": "66672b822002b6f19af478fb7c886787afee5f9f",
+      "fileIdx": 98,
+      "behaviorHints": {
+        "bingeGroup": "torrentio|1080p|BluRay|x264",
+        "filename": "Interstellar.2014.2014.1080p.BluRay.x264.YIFY.mp4"
+      }
+    }
+  },
+  {
+    "id": "interstellar-torrentio-2",
+    "source": "torrentio",
+    "note": "Tamil+Eng release, flags GB/IN",
+    "raw": {
+      "name": "Torrentio\n1080p",
+      "title": "Interstellar (2014) BluRay - 1080p - x264 - [Tamil + Eng] - (DD+…\n👤 58 💾 2.56 GB ⚙️ TorrentGalaxy\n🇬🇧 / 🇮🇳",
+      "infoHash": "5852fa30d4a6cc90ba85389e3658d4760996753a",
+      "fileIdx": 0,
+      "behaviorHints": {
+        "bingeGroup": "torrentio|1080p|BluRay|x264",
+        "filename": "Interstellar (2014) BluRay - 1080p - x264 - [Tamil + Eng] - (DD+2.0 - 224Kbps) - 2.5GB - ESub.mkv"
+      }
+    }
+  },
+  {
+    "id": "interstellar-hdhub-trunc-1",
+    "source": "hdhub",
+    "note": "truncated, 34.07 GB REMUX",
+    "raw": {
+      "name": "4KHDHub 1080p",
+      "description": "[10Gbps Download Only] [💾 34.07 GB] Interstellar (2014) IMAX 1080p BluRay REMUX AVC [Hindi DDP 5.1 + English DTS-HD MA 5.1] x264 (ATELiE\nRemux | Hindi\n10Gbps Download Only | 4KHDHub",
+      "url": "https://pixel.hubcloud.mov/?id=7ae98a1d44714d47374d53897c358b6f56c959e626e59c63cd63bd6ce4b497895e3cd9061a6873a7e2aedce3acdb42130a2fdfa2b8ca1de02934ae0eb548cc9458117302af8be2b579fb0fabef0dece86bf2f60dcb4f4cb72287676139a3b9b4::6a0957ca572d250e1dbad85cdf47d0e5",
+      "behaviorHints": {
+        "notWebReady": true,
+        "videoSize": 36582383944
+      }
+    }
+  },
+  {
+    "id": "interstellar-hdhub-trunc-2",
+    "source": "hdhub",
+    "note": "truncated, 13.99 GB HEVC",
+    "raw": {
+      "name": "4KHDHub 1080p",
+      "description": "[10Gbps Download Only] [💾 13.99 GB] Interstellar (2014) IMAX 1080p BluRay 10bit HEVC [Hindi DDP 5.1 + English DDP 5.1] x265 (WiKi-LUMiX)\nHindi DDP 5.1 + English DDP 5.1\n10Gbps Download Only | 4KHDHub",
+      "url": "https://gpdl.hubcloud.mov/?id=596d08e52e7b472a1d59279ed0a1e9f95c71768fdfa7c122bb6dcdd0ed2ee0829b5942e4063f6754b5a9abeab404511657d4c18a5b20cefde3fe3f89c2ef9c82dd94faabde15f4cd21ad4d479ec610205a7583f666da9c56aad50c4efbf6ad35787bff42bebd79ba21a98ae771558da9::6531da6ad51dceb1285c30d10d033f47",
+      "behaviorHints": {
+        "notWebReady": true,
+        "videoSize": 15021648118
+      }
+    }
+  },
+  {
+    "id": "interstellar-hdhub-trunc-3",
+    "source": "hdhub",
+    "note": "truncated, 9.47 GB HEVC",
+    "raw": {
+      "name": "4KHDHub 1080p",
+      "description": "[10Gbps Download Only] [💾 9.47 GB] Interstellar (2014) IMAX 1080p BluRay 10bit HEVC [Hindi DDP 5.1 + English DDP 5.1] x265 (DarQ HONE-L\nHindi DDP 5.1 + English DDP 5.1\n10Gbps Download Only | 4KHDHub",
+      "url": "https://gpdl.hubcloud.mov/?id=af1b8eba48a5e3a794b2944127f40baef3642d5e8d9be2782473d00a3602437f4ac3efaa05cc0d3ae23e5e47eabc5af484e9107d0ab3f439c4561b07cea99c472e6b6b0500fa00b11c341a4d40fa480bf2d72de8159767c2a7d0e2551b885ef7640ee12b23c2893338be5b440f3c3061::7aebe0a1a37b74d5e7e5e0e748fd6f9d",
+      "behaviorHints": {
+        "notWebReady": true,
+        "videoSize": 10168335073
+      }
+    }
+  },
+  {
+    "id": "mirzapur-series-synthetic",
+    "source": "torrentio",
+    "note": "SYNTHETIC — no live series row exists in the corpus",
+    "raw": {
+      "infoHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "title": "Mirzapur S01E01 1080p Hindi WEB-DL - x264 - (DD+5.1 - 640Kbps & AAC) - 2.4GB - ESub\n👤 312 💾 2.41 GB ⚙️ EXT\n🇮🇳",
+      "behaviorHints": {
+        "filename": "Mirzapur.S01E01.1080p.Hindi.WEB-DL.x264.DD+5.1.AAC.2.4GB.ESub.mkv"
+      }
+    }
+  }
+]
