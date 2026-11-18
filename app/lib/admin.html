@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Binge Addon — Admin</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; background: #f6f8fb; color: #1a2332; }
+  header { background: #0f2a4a; color: #fff; padding: 18px 24px; }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 4px 0 0; opacity: .8; font-size: 13px; }
+  main { max-width: 980px; margin: 0 auto; padding: 20px; }
+  .card { background: #fff; border: 1px solid #dfe6ee; border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(16,42,74,.06); }
+  h2 { margin: 0 0 10px; font-size: 17px; }
+  .muted { color: #5b6b7f; font-size: 13px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  input[type=text], input[type=password], input[type=number], select { padding: 8px 10px; border: 1px solid #c6d2df; border-radius: 8px; font-size: 14px; }
+  input[type=text].name { width: 260px; }
+  input[type=number] { width: 90px; }
+  button { background: #0f2a4a; color: #fff; border: 0; border-radius: 8px; padding: 9px 16px; font-size: 14px; cursor: pointer; }
+  button.secondary { background: #e8eef4; color: #0f2a4a; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.danger { background: #b3261e; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #edf1f5; vertical-align: middle; }
+  th { color: #5b6b7f; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .pill { display: inline-block; background: #e6f4ea; color: #137333; border-radius: 20px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
+  .pill.off { background: #fce8e6; color: #a50e0e; }
+  .pill.warn { background: #fef7e0; color: #7a5b00; }
+  .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+  .status-grid div { background: #f6f8fb; border-radius: 8px; padding: 10px 12px; }
+  .status-grid b { display: block; font-size: 12px; color: #5b6b7f; text-transform: uppercase; letter-spacing: .04em; }
+  .status-grid span { font-size: 15px; }
+  #login { max-width: 420px; margin: 60px auto; }
+  #app { display: none; }
+  #msg { min-height: 20px; font-size: 14px; margin-top: 8px; }
+  #msg.err { color: #a50e0e; }
+  #msg.ok { color: #137333; }
+  .knob-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+  .knob { background: #f6f8fb; border-radius: 8px; padding: 10px 12px; }
+  .knob b { font-size: 14px; }
+  .knob label { display: block; font-size: 12px; color: #5b6b7f; margin-top: 6px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Binge Addon — Admin Dashboard</h1>
+  <p>Catalogs, rows, streams &amp; rebuilds. Same Vercel project, no new hosting.</p>
+</header>
+<main>
+  <div id="login" class="card">
+    <h2>Sign in</h2>
+    <p class="muted">Enter the admin password to manage Binge Addon.</p>
+    <div class="row">
+      <input type="password" id="pw" placeholder="Admin password" autocomplete="current-password">
+      <button id="loginBtn">Sign in</button>
+    </div>
+    <div id="loginMsg" class="muted"></div>
+  </div>
+
+  <div id="app">
+    <div class="card">
+      <h2>Connection status</h2>
+      <div class="status-grid" id="statusGrid"></div>
+      <p class="muted" style="margin-top:10px">
+        Live addon: <a id="liveLink" href="https://bharat-streams-httpbasant2-9067s-projects.vercel.app/manifest.json" target="_blank" rel="noopener">manifest.json</a>
+        &nbsp;·&nbsp; <a id="projectLink" href="https://vercel.com/httpbasant2-9067s-projects/bharat-streams" target="_blank" rel="noopener">Vercel project</a>
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Catalogs <span class="muted" id="catalogSummary"></span></h2>
+      <p class="muted">Untick to hide a row from Nuvio (it comes back on re-tick + rebuild). Rename or move rows with ↑ ↓. Save, then Rebuild for content changes to take effect.</p>
+      <table>
+        <thead><tr><th>Show</th><th>Name in Nuvio</th><th>Type</th><th>Items</th><th>Top titles</th><th>Order</th></tr></thead>
+        <tbody id="catalogBody"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Row settings</h2>
+      <p class="muted">Window = how far back the row looks (days). Vote floor = minimum TMDB rating. Applies on the next rebuild.</p>
+      <div class="knob-grid" id="knobGrid"></div>
+    </div>
+
+    <div class="card">
+      <h2>Stream settings</h2>
+      <div class="row" id="streamRow">
+        <label><input type="checkbox" id="sTorrentio"> Torrentio</label>
+        <label><input type="checkbox" id="sComet"> Comet</label>
+        <label><input type="checkbox" id="sHdhub"> HdHub</label>
+        <label>Max quality
+          <select id="sQuality">
+            <option value="1080p">1080p (recommended)</option>
+            <option value="720p">720p</option>
+          </select>
+        </label>
+      </div>
+      <p class="muted">Stream changes apply immediately (no rebuild needed). 1080p cap stays the default — 4K is never served.</p>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <button id="saveBtn">Save settings</button>
+        <button id="rebuildBtn" class="danger">Manual Rebuild</button>
+        <span id="msg"></span>
+      </div>
+      <p class="muted">Manual Rebuild runs the same build as the daily cron (05:00 UTC = 10:30 IST) and takes ~30–60 seconds. Keep this tab open until it reports done, then the counts above refresh.</p>
+    </div>
+  </div>
+</main>
+<script>
+let pw = sessionStorage.getItem('bs-admin-pw') || '';
+let cfg = null;
+let status = null;
+
+const $ = (id) => document.getElementById(id);
+function headers() { return { 'X-Admin-Password': pw, 'Content-Type': 'application/json' }; }
+function setMsg(t, cls) { const m = $('msg'); m.textContent = t; m.className = cls || ''; }
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+
+function renderStatus() {
+  if (!status) return;
+  const g = $('statusGrid');
+  const pill = (ok, a, b) => '<span class="pill ' + (ok ? '' : 'off') + '">' + (ok ? a : b) + '</span>';
+  g.innerHTML =
+    '<div><b>Version</b><span>' + status.version + '</span></div>' +
+    '<div><b>TMDB key</b><span>' + pill(status.tmdbKeySet, 'Set', 'NOT SET') + '</span></div>' +
+    '<div><b>Blob store</b><span>' + pill(status.blobSet, 'Connected', 'NOT SET') + '</span></div>' +
+    '<div><b>Last rebuild</b><span>' + (status.lastBuiltAt ? new Date(status.lastBuiltAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST' : '—') + '</span></div>' +
+    '<div><b>Next cron</b><span>' + status.nextCron + '</span></div>' +
+    '<div><b>Live URL</b><span><a href="' + status.liveUrl + '" target="_blank" rel="noopener">open</a></span></div>';
+  $('projectLink').href = status.projectUrl;
+}
+
+function renderCatalogs() {
+  const body = $('catalogBody');
+  const ids = Object.keys(cfg.catalogs).sort((a, b) => (cfg.catalogs[a].order ?? 999) - (cfg.catalogs[b].order ?? 999));
+  const counts = {};
+  (status?.catalogs || []).forEach((c) => { counts[c.id] = c; });
+  $('catalogSummary').textContent = '— ' + ids.filter((id) => cfg.catalogs[id].enabled !== false).length + ' of ' + ids.length + ' shown';
+  body.innerHTML = ids.map((id) => {
+    const c = cfg.catalogs[id];
+    const s = counts[id] || { count: '—', top: [] };
+    return '<tr>' +
+      '<td><input type="checkbox" data-cat="' + id + '" data-field="enabled" ' + (c.enabled !== false ? 'checked' : '') + '></td>' +
+      '<td><input type="text" class="name" data-cat="' + id + '" data-field="name" value="' + escapeHtml(c.name) + '"></td>' +
+      '<td>' + (id.endsWith('-series') ? 'Series' : 'Movie') + '</td>' +
+      '<td>' + (c.enabled === false ? '<span class="pill off">hidden</span>' : '<span class="pill">' + s.count + ' items</span>') + '</td>' +
+      '<td class="muted">' + escapeHtml((s.top || []).join(', ')) + '</td>' +
+      '<td><button class="secondary" data-move="' + id + '" data-dir="-1" title="Move up">↑</button> ' +
+      '<button class="secondary" data-move="' + id + '" data-dir="1" title="Move down">↓</button></td>' +
+      '</tr>';
+  }).join('');
+  body.querySelectorAll('[data-cat]').forEach((el) => {
+    el.addEventListener('change', () => {
+      const id = el.dataset.cat;
+      cfg.catalogs[id][el.dataset.field] = el.type === 'checkbox' ? el.checked : el.value;
+      renderCatalogs();
+    });
+  });
+  body.querySelectorAll('[data-move]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.move, dir = parseInt(btn.dataset.dir, 10);
+      const ids = Object.keys(cfg.catalogs).sort((a, b) => (cfg.catalogs[a].order ?? 999) - (cfg.catalogs[b].order ?? 999));
+      const i = ids.indexOf(id), j = i + dir;
+      if (j < 0 || j >= ids.length) return;
+      const tmp = cfg.catalogs[ids[i]].order;
+      cfg.catalogs[ids[i]].order = cfg.catalogs[ids[j]].order;
+      cfg.catalogs[ids[j]].order = tmp;
+      renderCatalogs();
+    });
+  });
+}
+
+const KNOB_LABELS = {
+  'fresh-digital-drops': 'Fresh Digital Drops', 'latest-indian-ott': 'Latest Indian Movies — OTT Ready',
+  'latest-indian-series': 'Latest Indian Web Series', 'releasing-next-30-days': 'Releasing Next 30 Days',
+  'big-announcements': 'Big Announcements', 'newly-announced-series': 'Newly Announced Web Series',
+  'returning-soon': 'New Season Returning Soon', 'now-in-theatres': 'Now in Theatres',
+  'south-blockbusters': 'South Indian Blockbusters', 'underrated-gems': 'Underrated Indian Gems',
+  'scifi-time-travel': 'Sci-Fi & Time Travel', 'psychological-thrillers': 'Psychological Thrillers',
+  'action-heist-revenge': 'Action, Heist & Revenge', 'one-season-miniseries': '1-Season Mini-Series',
+  'visual-spectacles': 'Visual Spectacles', 'action-anime': 'Action & Dark Anime',
+  'all-time-classics': 'All-Time Classics', 'dark-crime': 'Dark Crime & Thrillers',
+};
+
+function renderKnobs() {
+  const g = $('knobGrid');
+  g.innerHTML = Object.keys(cfg.knobs).map((key) => {
+    const k = cfg.knobs[key];
+    const fields = [];
+    if (typeof k.windowDays === 'number') fields.push('<label>Window (days)<input type="number" min="1" max="1825" data-knob="' + key + '" data-field="windowDays" value="' + k.windowDays + '"></label>');
+    if (typeof k.voteFloor === 'number') fields.push('<label>Vote floor (0–10)<input type="number" min="0" max="10" step="0.1" data-knob="' + key + '" data-field="voteFloor" value="' + k.voteFloor + '"></label>');
+    if (typeof k.voteCountFloor === 'number') fields.push('<label>Min votes<input type="number" min="0" step="100" data-knob="' + key + '" data-field="voteCountFloor" value="' + k.voteCountFloor + '"></label>');
+    if (typeof k.voteCountCeil === 'number') fields.push('<label>Max votes<input type="number" min="0" step="100" data-knob="' + key + '" data-field="voteCountCeil" value="' + k.voteCountCeil + '"></label>');
+    return '<div class="knob"><b>' + escapeHtml(KNOB_LABELS[key] || key) + '</b>' + fields.join('') + '</div>';
+  }).join('');
+  g.querySelectorAll('[data-knob]').forEach((el) => {
+    el.addEventListener('change', () => {
+      cfg.knobs[el.dataset.knob][el.dataset.field] = parseFloat(el.value);
+    });
+  });
+}
+
+function renderStreams() {
+  const s = cfg.streams || {};
+  $('sTorrentio').checked = s.torrentio !== false;
+  $('sComet').checked = s.comet !== false;
+  $('sHdhub').checked = s.hdhub !== false;
+  $('sQuality').value = s.maxQuality || '1080p';
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function loadAll() {
+  const c = await api('/admin/api/config', { headers: headers() });
+  cfg = c.config;
+  status = await api('/admin/api/status', { headers: headers() });
+  renderStatus(); renderCatalogs(); renderKnobs(); renderStreams();
+  $('login').style.display = 'none';
+  $('app').style.display = 'block';
+}
+
+async function login() {
+  pw = $('pw').value.trim();
+  if (!pw) return;
+  try {
+    sessionStorage.setItem('bs-admin-pw', pw);
+    await loadAll();
+    $('loginMsg').textContent = '';
+  } catch (e) {
+    $('loginMsg').textContent = 'Could not sign in: ' + e.message;
+    pw = '';
+    sessionStorage.removeItem('bs-admin-pw');
+  }
+}
+
+$('loginBtn').addEventListener('click', login);
+$('pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
+
+$('saveBtn').addEventListener('click', async () => {
+  cfg.streams = {
+    torrentio: $('sTorrentio').checked,
+    comet: $('sComet').checked,
+    hdhub: $('sHdhub').checked,
+    maxQuality: $('sQuality').value,
+  };
+  setMsg('Saving…');
+  try {
+    const r = await api('/admin/api/config', { method: 'POST', headers: headers(), body: JSON.stringify(cfg) });
+    cfg = r.config;
+    setMsg('Saved. Catalog name/order changes show in the manifest within ~1 minute; row content changes need a Rebuild.', 'ok');
+    renderCatalogs();
+  } catch (e) { setMsg('Save failed: ' + e.message, 'err'); }
+});
+
+$('rebuildBtn').addEventListener('click', async () => {
+  setMsg('Rebuilding… this takes ~30–60 seconds, keep this tab open.');
+  $('rebuildBtn').disabled = true;
+  try {
+    // Same build path as the daily cron endpoint.
+    const r = await fetch('/api/cron/rebuild');
+    const j = await r.json().catch(() => ({}));
+    if (!j.ok) throw new Error(j.error || 'rebuild failed');
+    const total = j.counts ? Object.values(j.counts).reduce((a, b) => a + b, 0) : '?';
+    const rows = j.counts ? Object.keys(j.counts).length : '?';
+    setMsg('Rebuild done: ' + rows + ' rows, ' + total + ' items. Trending Indian movie ' +
+      (j.counts ? (j.counts['trending-indian-movie'] ?? '—') : '—') + ', series ' +
+      (j.counts ? (j.counts['trending-indian-series'] ?? '—') : '—') + '.', 'ok');
+    status = await api('/admin/api/status', { headers: headers() });
+    renderStatus(); renderCatalogs();
+  } catch (e) { setMsg('Rebuild failed: ' + e.message, 'err'); }
+  $('rebuildBtn').disabled = false;
+});
+
+if (pw) { loadAll().catch(() => { $('login').style.display = 'block'; }); }
+</script>
+</body>
+</html>

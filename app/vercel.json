@@ -1,0 +1,1 @@
+{"crons":[{"path":"/api/cron/rebuild","schedule":"0 5 * * *"}],"functions":{"api/cron/rebuild.js":{"maxDuration":300},"api/index.js":{"maxDuration":10}},"rewrites":[{"destination":"/api","source":"/(.*)"}]}

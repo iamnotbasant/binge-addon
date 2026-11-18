@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+app/node_modules/
+
+# Vercel
+.vercel/
+app/.vercel/
+
+# Env / secrets — never commit real keys or tokens
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Vercel Blob / local data dumps
+*.blob.json
+blob-data/
+data/
+
+# OS / editor
+.DS_Store
+Thumbs.db
