@@ -26,7 +26,7 @@ const { readConfig, writeConfig, effectiveCatalogs, normalizeConfig } = require(
 const STREAM_CAP = 40;
 const TMDB_IMG = 'https://image.tmdb.org/t/p';
 const ADDON_NAME = 'binge-addon';
-const VERSION = '1.0.7';
+const VERSION = '1.0.8';
 
 const builder = new addonBuilder(MANIFEST);
 
@@ -228,25 +228,118 @@ app.get('/admin/api/status', requireAdmin, async (req, res) => {
     const cfg = await readConfig();
     const catalogs = [];
     let lastBuiltAt = null;
-    for (const c of effectiveCatalogs(cfg)) {
-      const file = await readCatalogMeta(c.id);
-      const metas = file ? file.metas : [];
-      if (file && file.builtAt && (!lastBuiltAt || file.builtAt > lastBuiltAt)) lastBuiltAt = file.builtAt;
-      catalogs.push({
-        id: c.id, type: c.type, name: c.name,
-        count: metas.length,
-        top: metas.slice(0, 3).map((m) => m.name),
-        builtAt: file ? file.builtAt : null,
-      });
+    const token = process.env.BLOB_READ_WRITE_TOKEN;
+
+    // Primary: fetch lightweight summary manifest catalogs/_summary.json bypassing 5-min store cache
+    let summary = null;
+    if (token) {
+      try {
+        const { list } = require('@vercel/blob');
+        const { blobs } = await list({ prefix: 'catalogs/_summary.json', token });
+        const file = (blobs || []).find((b) => b.pathname === 'catalogs/_summary.json');
+        if (file) {
+          const sRes = await fetch(file.url);
+          if (sRes.ok) summary = await sRes.json();
+        }
+      } catch (err) {
+        console.log(`[binge-addon] summary manifest read error: ${err.message}`);
+      }
     }
-    // Disabled catalogs: show with count 0 so the dashboard lists all 27.
-    const allIds = Object.keys(cfg.catalogs || {});
-    for (const id of allIds) {
-      if (catalogs.some((c) => c.id === id)) continue;
-      const c = cfg.catalogs[id];
-      catalogs.push({ id, type: id.endsWith('-series') ? 'series' : 'movie', name: c.name, count: 0, top: [], builtAt: null, disabled: true });
+
+    if (summary && summary.catalogs) {
+      lastBuiltAt = summary.builtAt || null;
+      const allIds = Object.keys(cfg.catalogs || {});
+      for (const id of allIds) {
+        const c = cfg.catalogs[id] || {};
+        const type = id.endsWith('-series') ? 'series' : 'movie';
+        const name = c.name || id;
+        const s = summary.catalogs[id];
+        if (s && c.enabled !== false) {
+          catalogs.push({
+            id,
+            type,
+            name,
+            count: typeof s.count === 'number' ? s.count : 0,
+            top: Array.isArray(s.top) ? s.top : [],
+            builtAt: s.builtAt || summary.builtAt || null,
+          });
+        } else {
+          catalogs.push({
+            id,
+            type,
+            name,
+            count: 0,
+            top: [],
+            builtAt: null,
+            disabled: true,
+          });
+        }
+      }
+    } else {
+      // Fallback: single prefix list of catalogs/ with internal files filtered out,
+      // followed by concurrent Blob fetches via Promise.allSettled.
+      const blobMap = new Map();
+      if (token) {
+        try {
+          const { list } = require('@vercel/blob');
+          const { blobs } = await list({ prefix: 'catalogs/', token });
+          const catalogBlobs = (blobs || []).filter((b) =>
+            b.pathname.endsWith('.json') && !b.pathname.includes('/_')
+          );
+          await Promise.allSettled(
+            catalogBlobs.map(async (b) => {
+              try {
+                const fRes = await fetch(b.url);
+                if (!fRes.ok) return;
+                const data = await fRes.json();
+                const id = b.pathname.replace(/^catalogs\//, '').replace(/\.json$/, '');
+                blobMap.set(id, {
+                  metas: Array.isArray(data.metas) ? data.metas : [],
+                  builtAt: data.builtAt || null,
+                });
+              } catch (e) {}
+            })
+          );
+        } catch (err) {
+          console.log(`[binge-addon] blob prefix list fallback error: ${err.message}`);
+        }
+      }
+
+      const allIds = Object.keys(cfg.catalogs || {});
+      for (const id of allIds) {
+        const c = cfg.catalogs[id] || {};
+        const type = id.endsWith('-series') ? 'series' : 'movie';
+        const name = c.name || id;
+        const file = blobMap.get(id);
+        if (file && c.enabled !== false) {
+          const metas = file.metas;
+          if (file.builtAt && (!lastBuiltAt || file.builtAt > lastBuiltAt)) {
+            lastBuiltAt = file.builtAt;
+          }
+          catalogs.push({
+            id,
+            type,
+            name,
+            count: metas.length,
+            top: metas.slice(0, 3).map((m) => m.name),
+            builtAt: file.builtAt,
+          });
+        } else {
+          catalogs.push({
+            id,
+            type,
+            name,
+            count: 0,
+            top: [],
+            builtAt: null,
+            disabled: true,
+          });
+        }
+      }
     }
+
     catalogs.sort((a, b) => (cfg.catalogs[a.id]?.order ?? 999) - (cfg.catalogs[b.id]?.order ?? 999));
+
     res.json({
       ok: true,
       version: VERSION,
@@ -264,6 +357,28 @@ app.get('/admin/api/status', requireAdmin, async (req, res) => {
     res.status(500).json({ ok: false, error: String(e.message) });
   }
 });
+
+// --- Cron rebuild endpoint: GET/POST /api/cron/rebuild (daily Vercel Cron).
+// Enforces Bearer CRON_SECRET authentication strictly; no unverified headers.
+app.all('/api/cron/rebuild', async (req, res) => {
+  const auth = req.headers['authorization'];
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret || auth !== `Bearer ${cronSecret}`) {
+    return res.status(401).json({ ok: false, error: 'unauthorized cron trigger' });
+  }
+  try {
+    const { main } = require('./scripts/build-catalogs');
+    const result = await main();
+    return res.status(200).json({ ok: true, ...result });
+  } catch (e) {
+    console.error(`[cron/rebuild] FAILED: ${e.message}`);
+    return res.status(500).json({ ok: false, error: String(e.message) });
+  }
+});
+
+// --- Admin rebuild endpoint: POST /api/admin/rebuild (manual dashboard rebuild).
+// Uses dedicated rebuild handler with X-Admin-Password gate and 300s budget.
+app.all('/api/admin/rebuild', require('./api/admin/rebuild'));
 
 app.use(getRouter(builder.getInterface()));
 

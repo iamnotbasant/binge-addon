@@ -1013,6 +1013,31 @@ async function main() {
     }
   }
   await writeRowsToBlob(rows, idMap, token);
+  const summary = {
+    builtAt: new Date().toISOString(),
+    catalogs: Object.fromEntries(
+      Object.entries(rows).map(([id, metas]) => [
+        id,
+        {
+          count: metas.length,
+          top: metas.slice(0, 3).map((m) => m.name),
+          builtAt: new Date().toISOString(),
+        },
+      ])
+    ),
+  };
+  try {
+    const { put } = require('@vercel/blob');
+    await put('catalogs/_summary.json', JSON.stringify(summary), {
+      access: 'public',
+      token,
+      addRandomSuffix: false,
+      allowOverwrite: true,
+    });
+  } catch (err) {
+    console.error(`[build-catalogs] summary manifest write failed: ${err.message}`);
+    // Non-fatal: failed summary write must never abort or fail the catalog rebuild.
+  }
   const counts = Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, v.length]));
   console.log(`[build-catalogs] done. rows=${JSON.stringify(counts)} excludedNoImdb=${stats.excludedNoImdb} excludedTvShow=${JSON.stringify(stats.excludedTvShow)} keywords=${JSON.stringify(stats.keywords)} idMapSize=${Object.keys(idMap).length}`);
   return { skipped: false, counts, excludedNoImdb: stats.excludedNoImdb, excludedTvShow: stats.excludedTvShow, keywords: stats.keywords, trendingTopUp: stats.trendingTopUp };

@@ -1426,3 +1426,44 @@ Date: 18 Nov 2026. Built by Muse subagents on this VM (no external person/compan
   - Meta Jailer 2 (`/meta/movie/tt33318732.json`) 200, full meta: genres Action/Comedy/Drama, director Nelson, releaseInfo 2026, runtime 165 min, cast 10, poster + description.
   - `/admin` 200.
 - **Still open (parent):** the ONE thing unverifiable headlessly is how the restyled badges LOOK in Nuvio on-device — basant removes + re-pastes the badges.json URL in Nuvio himself (Fusion ON) and sends a stream-list screenshot. That on-device look is the final verdict; nothing here claims the look until he confirms it.
+
+## v1.0.8 ADMIN DASHBOARD REDESIGN 18 Nov 2026 (basant: approved Elephant v2 design)
+- **Goal:** Rebuild the Binge Addon admin dashboard (`/admin`) into a high-craft, dark-themed control panel modeled after modern open-source Stremio configuration interfaces (specifically the AIOMetadata configuration experience), fixing the status 504 Gateway Timeout defect and securing the unauthenticated cron hole.
+- **What changed (code complete, target version v1.0.8 everywhere):**
+  - **`app/lib/admin.html` (Full rewrite per Elephant v2 design):**
+    - **Visual Theme:** Strict dark mode palette (`#0b0f17` canvas, `#0e1420` sidebar, `#141c2b` cards, `#1e293b` borders, `#2563eb` electric blue accent, emerald green `#10b981` status, crimson `#ef4444` destructive triggers). Zero AI slop, zero generic purple gradients, zero stock photos, zero fake metrics. System font stack only.
+    - **Sidebar Navigation:** Fixed 240px vertical sidebar with 5 dedicated view panels: Overview, Catalogs, Rows, Streams, Rebuild. Collapses into sticky top nav on mobile/tablets (< 900px).
+    - **Overview Panel:** Diagnostic cards for Addon Core (v1.0.8, com.bharatstreams), TMDB API status, Vercel Blob store status, catalog row counts, and update schedule (IST formatted). Resource Hub with direct links to `manifest.json`, `badges.json`, `Live URL`, `Vercel Project`, and `Live Health`.
+    - **Catalogs Panel:** All 27 rows configurable with pill toggles (Show in Nuvio), inline row rename inputs, media type pills (Movie/Series), cached item counts, sample titles, and position reorder buttons (`↑`/`↓`). Instant client-side search/filter bar.
+    - **Rows Panel:** Full tuning parity for date windows and rating floors across all rows (`windowDays`, `voteFloor`, `voteCountFloor`). Preserves `voteCountCeil` rendered with user-friendly label **"Maximum votes"** on `#13 Underrated Indian Gems`.
+    - **Streams Panel:** Toggle switches for stream scraper sources (Torrentio, Comet, HdHub) and video quality dropdown (1080p Full HD vs 720p HD Data Saver).
+    - **Rebuild Panel:** Manual build console triggering `POST /api/admin/rebuild` with elapsed timer display (`00:23 / ~00:45`), keep-tab-open notification, and live status refresh without full page reload.
+    - **State & Failure Handling (§7.4):** In-memory dirty state tracking (`savedConfig` vs `draftConfig`) across view navigation; sticky Save button with dirty indicator; `onbeforeunload` unsaved changes warning; non-destructive 401 session recovery modal overlay preserving draft edits; error toasts with retry capability; targeted DOM updates preserving text input focus and scroll positions.
+  - **`app/api/admin/rebuild.js` (NEW):**
+    - Dedicated authenticated manual rebuild endpoint configured with `maxDuration: 300` in `vercel.json`.
+    - Authenticated via `X-Admin-Password` header matching `ADMIN_PASSWORD`.
+    - Cleanly handles `{ skipped: true }` responses when prerequisites are missing, returning human-readable messages.
+  - **`app/index.js`:**
+    - Status endpoint (`GET /admin/api/status`) completely reworked: queries `catalogs/_summary.json` directly as primary path (bypassing 5-minute memory cache); falls back to single `catalogs/` prefix list with internal file exclusion (`!b.pathname.includes('/_')`) and concurrent `Promise.allSettled` Blob fetches; merges disabled rows with count 0 and preserves order.
+    - Cron route (`/api/cron/rebuild`) enforces `Authorization: Bearer <CRON_SECRET>` strictly; removed unverified headers.
+    - Local Express mounts `app.all('/api/admin/rebuild', require('./api/admin/rebuild'))` for local dev parity.
+    - Version bumped to `1.0.8`.
+  - **`app/scripts/build-catalogs.js`:**
+    - Generates and writes summary manifest `catalogs/_summary.json` to Vercel Blob at end of `main()` on full success only. Includes counts, top 3 display title names (`m.name`), and timestamp.
+  - **`app/vercel.json`:**
+    - Configured `api/admin/rebuild.js` with `maxDuration: 300`.
+  - **Version bumps:**
+    - `app/index.js` (VERSION = '1.0.8')
+    - `app/lib/manifest.js` (version: '1.0.8')
+    - `app/package.json` ("version": "1.0.8")
+    - `app/package-lock.json` (top-level package version fields only)
+- **Local verification BEFORE finish (all PASS):**
+  - Node syntax checks on all edited JS files (`app/index.js`, `app/lib/manifest.js`, `app/scripts/build-catalogs.js`, `app/api/admin/rebuild.js`): clean exit 0.
+  - Server local smoke test:
+    - `GET /admin` -> 200 OK, full dark theme HTML delivered with all 5 view panels.
+    - `GET /admin/api/config` -> 401 without password, 200 with valid password.
+    - `POST /admin/api/config` -> 401 without password, 200 with valid password (round-trip verified).
+    - `GET /admin/api/status` -> 401 without password, 200 with valid password (fast response, all 27 catalogs returned with disabled rows mapped to count 0).
+    - `POST /api/admin/rebuild` -> 401 without password, rejects unauthorized triggers.
+    - `GET /api/cron/rebuild` -> 401 without `Bearer CRON_SECRET`, rejects unauthorized triggers.
+

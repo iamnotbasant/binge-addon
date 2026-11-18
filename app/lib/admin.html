@@ -3,289 +3,1826 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Binge Addon — Admin</title>
+<title>Binge Addon — Admin Dashboard</title>
 <style>
-  * { box-sizing: border-box; }
-  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; background: #f6f8fb; color: #1a2332; }
-  header { background: #0f2a4a; color: #fff; padding: 18px 24px; }
-  header h1 { margin: 0; font-size: 22px; }
-  header p { margin: 4px 0 0; opacity: .8; font-size: 13px; }
-  main { max-width: 980px; margin: 0 auto; padding: 20px; }
-  .card { background: #fff; border: 1px solid #dfe6ee; border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(16,42,74,.06); }
-  h2 { margin: 0 0 10px; font-size: 17px; }
-  .muted { color: #5b6b7f; font-size: 13px; }
-  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  input[type=text], input[type=password], input[type=number], select { padding: 8px 10px; border: 1px solid #c6d2df; border-radius: 8px; font-size: 14px; }
-  input[type=text].name { width: 260px; }
-  input[type=number] { width: 90px; }
-  button { background: #0f2a4a; color: #fff; border: 0; border-radius: 8px; padding: 9px 16px; font-size: 14px; cursor: pointer; }
-  button.secondary { background: #e8eef4; color: #0f2a4a; }
-  button:disabled { opacity: .5; cursor: default; }
-  button.danger { background: #b3261e; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #edf1f5; vertical-align: middle; }
-  th { color: #5b6b7f; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
-  .pill { display: inline-block; background: #e6f4ea; color: #137333; border-radius: 20px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
-  .pill.off { background: #fce8e6; color: #a50e0e; }
-  .pill.warn { background: #fef7e0; color: #7a5b00; }
-  .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
-  .status-grid div { background: #f6f8fb; border-radius: 8px; padding: 10px 12px; }
-  .status-grid b { display: block; font-size: 12px; color: #5b6b7f; text-transform: uppercase; letter-spacing: .04em; }
-  .status-grid span { font-size: 15px; }
-  #login { max-width: 420px; margin: 60px auto; }
-  #app { display: none; }
-  #msg { min-height: 20px; font-size: 14px; margin-top: 8px; }
-  #msg.err { color: #a50e0e; }
-  #msg.ok { color: #137333; }
-  .knob-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
-  .knob { background: #f6f8fb; border-radius: 8px; padding: 10px 12px; }
-  .knob b { font-size: 14px; }
-  .knob label { display: block; font-size: 12px; color: #5b6b7f; margin-top: 6px; }
-  .hidden { display: none; }
+  :root {
+    --bg-canvas: #0b0f17;
+    --bg-sidebar: #0e1420;
+    --bg-card: #141c2b;
+    --bg-card-hover: #1a2436;
+    --border-subtle: #1e293b;
+    --border-focus: #3b82f6;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-tertiary: #64748b;
+    --accent-primary: #2563eb;
+    --accent-hover: #1d4ed8;
+    --accent-crimson: #ef4444;
+    --accent-crimson-hover: #dc2626;
+    --status-success: #10b981;
+    --status-success-bg: rgba(16, 185, 129, 0.12);
+    --status-error: #ef4444;
+    --status-error-bg: rgba(239, 68, 68, 0.12);
+    --status-warn: #f59e0b;
+    --status-warn-bg: rgba(245, 158, 11, 0.12);
+    --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg-canvas);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* --- Login Screen --- */
+  #view-login {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 20px;
+    background: var(--bg-canvas);
+  }
+  .login-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 400px;
+    padding: 28px 24px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  }
+  .login-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .login-brand h1 {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .login-badge {
+    background: #1e293b;
+    color: #94a3b8;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    font-weight: 600;
+  }
+  .login-desc {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-bottom: 24px;
+    line-height: 1.5;
+  }
+  .login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .pw-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .pw-wrapper input {
+    width: 100%;
+    padding-right: 44px;
+  }
+  .pw-toggle {
+    position: absolute;
+    right: 8px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    padding: 6px;
+    cursor: pointer;
+  }
+  .pw-toggle:hover { color: var(--text-primary); }
+
+  /* --- Main App Layout --- */
+  #app {
+    display: flex;
+    min-height: 100vh;
+    width: 100%;
+  }
+
+  /* --- Sidebar Navigation --- */
+  #sidebar {
+    width: 240px;
+    flex-shrink: 0;
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    z-index: 20;
+  }
+  .sidebar-header {
+    padding: 20px 16px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .brand-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .brand-title {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+  }
+  .version-tag {
+    background: #1e293b;
+    color: #94a3b8;
+    padding: 2px 7px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    font-weight: 600;
+  }
+  .connection-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--status-error);
+    transition: background-color 0.2s ease;
+  }
+  .status-dot.online {
+    background: var(--status-success);
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+  }
+
+  .nav-menu {
+    flex: 1;
+    padding: 16px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow-y: auto;
+  }
+  .nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+  .nav-btn:hover {
+    background: var(--bg-card);
+    color: var(--text-primary);
+  }
+  .nav-btn.active {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-weight: 600;
+    border-left: 3px solid var(--accent-primary);
+    padding-left: 9px;
+  }
+  .nav-icon {
+    font-size: 15px;
+    width: 18px;
+    text-align: center;
+    opacity: 0.8;
+  }
+  .nav-badge {
+    margin-left: auto;
+    background: #1e293b;
+    color: #94a3b8;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 9999px;
+    font-family: var(--font-mono);
+  }
+
+  .sidebar-footer {
+    padding: 16px;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--bg-sidebar);
+  }
+  .save-btn {
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--accent-primary);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, opacity 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    opacity: 0.7;
+  }
+  .save-btn:hover:not(:disabled) {
+    background: var(--accent-hover);
+    opacity: 1;
+  }
+  .save-btn.dirty {
+    opacity: 1;
+    background: var(--accent-primary);
+    box-shadow: 0 0 10px rgba(37, 99, 235, 0.4);
+  }
+  .save-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+  .signout-btn {
+    width: 100%;
+    padding: 8px 12px;
+    background: transparent;
+    color: var(--text-tertiary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .signout-btn:hover {
+    color: var(--text-secondary);
+    border-color: #334155;
+  }
+
+  /* --- Main Content Area --- */
+  #main-content {
+    flex: 1;
+    padding: 24px 32px 60px;
+    max-width: 1100px;
+    width: 100%;
+    margin: 0 auto;
+    overflow-y: auto;
+  }
+  .view-panel {
+    display: none;
+  }
+  .view-panel.active {
+    display: block;
+    animation: fadeIn 0.15s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .view-header {
+    margin-bottom: 20px;
+  }
+  .view-title {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+  .view-subtitle {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  /* --- Cards and Common Containers --- */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+  }
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .card-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+
+  /* --- Form Inputs & Controls --- */
+  input[type=text], input[type=password], input[type=number], select {
+    background: var(--bg-canvas);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    padding: 8px 12px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  input[type=text]:focus, input[type=password]:focus, input[type=number]:focus, select:focus {
+    outline: none;
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  }
+  select {
+    cursor: pointer;
+  }
+
+  /* --- Pill Toggle Switch --- */
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 38px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+  .toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+  }
+  .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #334155;
+    transition: background-color 0.15s ease;
+    border-radius: 9999px;
+  }
+  .toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: #ffffff;
+    transition: transform 0.15s ease;
+    border-radius: 50%;
+  }
+  .toggle-switch input:checked + .toggle-slider {
+    background-color: var(--accent-primary);
+  }
+  .toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(18px);
+  }
+
+  /* --- Badges and Pills --- */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    font-family: var(--font-sans);
+  }
+  .pill.success {
+    background: var(--status-success-bg);
+    color: var(--status-success);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+  }
+  .pill.danger {
+    background: var(--status-error-bg);
+    color: var(--status-error);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+  }
+  .pill.neutral {
+    background: #1e293b;
+    color: var(--text-secondary);
+    border: 1px solid #334155;
+  }
+  .pill.info {
+    background: rgba(37, 99, 235, 0.12);
+    color: #60a5fa;
+    border: 1px solid rgba(37, 99, 235, 0.25);
+  }
+
+  /* --- Buttons --- */
+  button.btn-primary {
+    background: var(--accent-primary);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  button.btn-primary:hover { background: var(--accent-hover); }
+  button.btn-danger {
+    background: var(--accent-crimson);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  button.btn-danger:hover { background: var(--accent-crimson-hover); }
+  button.btn-icon {
+    background: #1e293b;
+    color: var(--text-secondary);
+    border: 1px solid #334155;
+    border-radius: 5px;
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s, color 0.15s;
+  }
+  button.btn-icon:hover {
+    background: #334155;
+    color: var(--text-primary);
+  }
+
+  /* --- Toast / Alert Banners --- */
+  .toast-container {
+    margin-bottom: 16px;
+  }
+  .toast {
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+    animation: fadeIn 0.2s ease;
+  }
+  .toast.success {
+    background: var(--status-success-bg);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: #34d399;
+  }
+  .toast.error {
+    background: var(--status-error-bg);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #f87171;
+  }
+  .toast.info {
+    background: rgba(37, 99, 235, 0.1);
+    border: 1px solid rgba(37, 99, 235, 0.25);
+    color: #93c5fd;
+  }
+  .toast strong { display: block; font-weight: 600; margin-bottom: 2px; }
+  .toast-close {
+    background: transparent;
+    border: none;
+    color: inherit;
+    opacity: 0.7;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 4px;
+  }
+  .toast-close:hover { opacity: 1; }
+
+  /* --- Overview Diagnostic Grid --- */
+  .diag-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .diag-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .diag-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-tertiary);
+    margin-bottom: 8px;
+  }
+  .diag-val {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+  }
+  .diag-sub {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  /* --- Resource Hub Links --- */
+  .resource-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .resource-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #101622;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: #60a5fa;
+    text-decoration: none;
+    font-size: 13px;
+    font-family: var(--font-mono);
+    transition: border-color 0.15s, background-color 0.15s;
+  }
+  .resource-link:hover {
+    border-color: #3b82f6;
+    background: #141c2b;
+  }
+
+  /* --- Catalogs View --- */
+  .catalog-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .search-box {
+    flex: 1;
+    min-width: 240px;
+    max-width: 400px;
+  }
+  .catalog-count-summary {
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .catalog-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .cat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    transition: border-color 0.15s, opacity 0.2s;
+  }
+  .cat-card.dimmed {
+    opacity: 0.6;
+    background: #0f1521;
+  }
+  .cat-card:hover {
+    border-color: #2a374a;
+  }
+  .cat-toggle-col {
+    display: flex;
+    align-items: center;
+  }
+  .cat-main-col {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .cat-name-input {
+    width: 250px;
+    font-weight: 500;
+  }
+  .cat-meta-badges {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cat-titles-preview {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 320px;
+  }
+  .cat-order-col {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+  }
+
+  /* --- Knobs Grid --- */
+  .knob-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 12px;
+  }
+  .knob-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .knob-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    border-bottom: 1px solid #1a2436;
+    padding-bottom: 6px;
+  }
+  .knob-field {
+    margin-bottom: 10px;
+  }
+  .knob-field:last-child { margin-bottom: 0; }
+  .knob-label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+  .knob-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+  .knob-field input[type=number] {
+    width: 90px;
+    text-align: right;
+    font-family: var(--font-mono);
+  }
+  .knob-helper {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    line-height: 1.4;
+  }
+
+  /* --- Streams View --- */
+  .stream-card-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid #1a2436;
+  }
+  .stream-card-row:last-child { border-bottom: none; }
+  .stream-provider-info strong {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .stream-provider-info span {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  /* --- Rebuild View --- */
+  .rebuild-console {
+    text-align: center;
+    padding: 32px 20px;
+  }
+  .rebuild-icon {
+    font-size: 36px;
+    margin-bottom: 12px;
+    color: var(--accent-crimson);
+  }
+  .rebuild-status-box {
+    margin: 20px auto 0;
+    max-width: 500px;
+    padding: 14px 18px;
+    background: #0b0f17;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-align: left;
+    line-height: 1.6;
+  }
+
+  /* --- 401 Session Recovery Modal --- */
+  .modal-backdrop {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .modal-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 420px;
+    padding: 24px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+  }
+
+  /* --- Responsive Styles (< 900px) --- */
+  @media (max-width: 899px) {
+    #app {
+      flex-direction: column;
+    }
+    #sidebar {
+      width: 100%;
+      height: auto;
+      position: sticky;
+      top: 0;
+      border-right: none;
+      border-bottom: 1px solid var(--border-subtle);
+      z-index: 30;
+    }
+    .sidebar-header {
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .nav-menu {
+      flex-direction: row;
+      overflow-x: auto;
+      padding: 6px 12px;
+      gap: 6px;
+    }
+    .nav-btn {
+      white-space: nowrap;
+      padding: 8px 12px;
+      font-size: 13px;
+    }
+    .nav-btn.active {
+      border-left: none;
+      border-bottom: 2px solid var(--accent-primary);
+      padding-left: 12px;
+    }
+    .sidebar-footer {
+      display: none; /* Moved to sticky bottom bar */
+    }
+    #mobile-bottom-bar {
+      display: flex !important;
+    }
+    #main-content {
+      padding: 16px 16px 80px;
+    }
+    .cat-name-input {
+      width: 100%;
+    }
+    .cat-titles-preview {
+      display: none;
+    }
+  }
+
+  /* Sticky Mobile Bottom Bar */
+  #mobile-bottom-bar {
+    display: none;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--bg-sidebar);
+    border-top: 1px solid var(--border-subtle);
+    padding: 10px 16px;
+    z-index: 25;
+    gap: 10px;
+    align-items: center;
+  }
+  #mobile-bottom-bar .save-btn {
+    flex: 1;
+    margin: 0;
+  }
 </style>
 </head>
 <body>
-<header>
-  <h1>Binge Addon — Admin Dashboard</h1>
-  <p>Catalogs, rows, streams &amp; rebuilds. Same Vercel project, no new hosting.</p>
-</header>
-<main>
-  <div id="login" class="card">
-    <h2>Sign in</h2>
-    <p class="muted">Enter the admin password to manage Binge Addon.</p>
-    <div class="row">
-      <input type="password" id="pw" placeholder="Admin password" autocomplete="current-password">
-      <button id="loginBtn">Sign in</button>
+
+<!-- Authentication Screen (#view-login) -->
+<div id="view-login">
+  <div class="login-card">
+    <div class="login-brand">
+      <h1 class="brand-title">Binge Addon</h1>
+      <span class="login-badge">v1.0.8</span>
     </div>
-    <div id="loginMsg" class="muted"></div>
+    <p class="login-desc">Admin Dashboard — Manage catalogs, row settings, stream scrapers, and run manual rebuilds.</p>
+    <div class="login-form">
+      <div class="pw-wrapper">
+        <input type="password" id="loginPw" placeholder="Admin password" autocomplete="current-password">
+        <button type="button" class="pw-toggle" id="loginPwToggle">Show</button>
+      </div>
+      <button class="btn-primary" id="loginSubmitBtn">Sign in</button>
+      <div id="loginErrorMsg" style="font-size:12px; color:var(--accent-crimson); min-height:16px;"></div>
+    </div>
   </div>
+</div>
 
-  <div id="app">
-    <div class="card">
-      <h2>Connection status</h2>
-      <div class="status-grid" id="statusGrid"></div>
-      <p class="muted" style="margin-top:10px">
-        Live addon: <a id="liveLink" href="https://binge-addon-httpbasant2-9067s-projects.vercel.app/manifest.json" target="_blank" rel="noopener">manifest.json</a>
-        &nbsp;·&nbsp; <a id="badgesLink" href="https://binge-addon-httpbasant2-9067s-projects.vercel.app/badges.json" target="_blank" rel="noopener">badges.json</a>
-        &nbsp;·&nbsp; <a id="projectLink" href="https://vercel.com/httpbasant2-9067s-projects/binge-addon" target="_blank" rel="noopener">Vercel project</a>
-      </p>
+<!-- Main App Shell (#app) -->
+<div id="app" style="display: none;">
+  <!-- Left Navigation Sidebar -->
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      <div class="brand-row">
+        <span class="brand-title">Binge Addon</span>
+        <span class="version-tag">v1.0.8</span>
+      </div>
+      <div class="connection-status">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusDotLabel">Checking connection…</span>
+      </div>
     </div>
 
-    <div class="card">
-      <h2>Catalogs <span class="muted" id="catalogSummary"></span></h2>
-      <p class="muted">Untick to hide a row from Nuvio (it comes back on re-tick + rebuild). Rename or move rows with ↑ ↓. Save, then Rebuild for content changes to take effect.</p>
-      <table>
-        <thead><tr><th>Show</th><th>Name in Nuvio</th><th>Type</th><th>Items</th><th>Top titles</th><th>Order</th></tr></thead>
-        <tbody id="catalogBody"></tbody>
-      </table>
+    <nav class="nav-menu">
+      <button class="nav-btn active" data-view="overview">
+        <span class="nav-icon">≡</span>
+        <span>Overview</span>
+      </button>
+      <button class="nav-btn" data-view="catalogs">
+        <span class="nav-icon">■</span>
+        <span>Catalogs</span>
+        <span class="nav-badge">27 rows</span>
+      </button>
+      <button class="nav-btn" data-view="rows">
+        <span class="nav-icon">⚙</span>
+        <span>Row Settings</span>
+      </button>
+      <button class="nav-btn" data-view="streams">
+        <span class="nav-icon">▶</span>
+        <span>Stream Sources</span>
+      </button>
+      <button class="nav-btn" data-view="rebuild">
+        <span class="nav-icon">⚡</span>
+        <span>Rebuild Catalogs</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="save-btn" id="sidebarSaveBtn">Save Settings</button>
+      <button class="signout-btn" id="sidebarSignOutBtn">Sign Out</button>
+    </div>
+  </aside>
+
+  <!-- Content Area -->
+  <main id="main-content">
+    <!-- Global Toast Container -->
+    <div class="toast-container" id="toastArea"></div>
+
+    <!-- Panel 1: Overview (#view-overview) -->
+    <div class="view-panel active" id="view-overview">
+      <div class="view-header">
+        <h2 class="view-title">Overview</h2>
+        <p class="view-subtitle">Live system diagnostics, storage connectivity, and quick resource links.</p>
+      </div>
+
+      <div class="diag-grid">
+        <div class="diag-card">
+          <div>
+            <div class="diag-label">Addon Core</div>
+            <div class="diag-val" id="diagAddonName">Binge Addon</div>
+            <div class="diag-sub">ID: <span style="font-family:var(--font-mono)">com.bharatstreams</span></div>
+          </div>
+          <div style="margin-top:10px;">
+            <span class="pill info">Version v1.0.8</span>
+          </div>
+        </div>
+
+        <div class="diag-card">
+          <div>
+            <div class="diag-label">TMDB Movie Database</div>
+            <div class="diag-val" id="diagTmdbStatus">—</div>
+            <div class="diag-sub">Discovery & metadata pipeline</div>
+          </div>
+          <div style="margin-top:10px;">
+            <span class="pill neutral" id="diagTmdbPill">Checking…</span>
+          </div>
+        </div>
+
+        <div class="diag-card">
+          <div>
+            <div class="diag-label">Cloud Storage (Vercel Blob)</div>
+            <div class="diag-val" id="diagBlobStatus">—</div>
+            <div class="diag-sub">Mumbai region (bom1)</div>
+          </div>
+          <div style="margin-top:10px;">
+            <span class="pill neutral" id="diagBlobPill">Checking…</span>
+          </div>
+        </div>
+
+        <div class="diag-card">
+          <div>
+            <div class="diag-label">Catalog Rows</div>
+            <div class="diag-val" id="diagCatalogCount">—</div>
+            <div class="diag-sub" id="diagItemsCount">— items cached</div>
+          </div>
+          <div style="margin-top:10px;">
+            <span class="pill neutral">27 rows total</span>
+          </div>
+        </div>
+
+        <div class="diag-card" style="grid-column: 1 / -1;">
+          <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:16px;">
+            <div>
+              <div class="diag-label">Last Catalog Update</div>
+              <div class="diag-val" id="diagLastBuilt">—</div>
+              <div class="diag-sub">Indian Standard Time (IST)</div>
+            </div>
+            <div>
+              <div class="diag-label">Next Auto-Update</div>
+              <div class="diag-val">Roz subah 10:30 AM IST</div>
+              <div class="diag-sub">Daily 05:00 UTC automated cron</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Resource Hub</h3>
+        </div>
+        <p class="card-desc">Direct links to essential live feeds and configuration artifacts:</p>
+        <div class="resource-links">
+          <a class="resource-link" id="linkManifest" target="_blank" rel="noopener" href="#">manifest.json ↗</a>
+          <a class="resource-link" id="linkBadges" target="_blank" rel="noopener" href="#">badges.json ↗</a>
+          <a class="resource-link" id="linkLiveUrl" target="_blank" rel="noopener" href="#">Live URL ↗</a>
+          <a class="resource-link" id="linkProjectUrl" target="_blank" rel="noopener" href="#">Vercel Project ↗</a>
+          <a class="resource-link" id="linkHealth" target="_blank" rel="noopener" href="#">Live Health ↗</a>
+        </div>
+      </div>
     </div>
 
-    <div class="card">
-      <h2>Row settings</h2>
-      <p class="muted">Window = how far back the row looks (days). Vote floor = minimum TMDB rating. Applies on the next rebuild.</p>
-      <div class="knob-grid" id="knobGrid"></div>
+    <!-- Panel 2: Catalogs (#view-catalogs) -->
+    <div class="view-panel" id="view-catalogs">
+      <div class="view-header">
+        <h2 class="view-title">Catalogs Management</h2>
+        <p class="view-subtitle">Band karoge to Nuvio se row gayab ho jayegi; on karoge to wapas aa jayegi. Reorder ya rename karne ke baad Save Settings dabayein.</p>
+      </div>
+
+      <div class="catalog-toolbar">
+        <div class="catalog-count-summary" id="catCountSummary">Showing 27 of 27 rows</div>
+        <input type="text" class="search-box" id="catSearchInput" placeholder="Filter rows by name or type…">
+      </div>
+
+      <div class="catalog-stack" id="catalogList"></div>
     </div>
 
-    <div class="card">
-      <h2>Stream settings</h2>
-      <div class="row" id="streamRow">
-        <label><input type="checkbox" id="sTorrentio"> Torrentio</label>
-        <label><input type="checkbox" id="sComet"> Comet</label>
-        <label><input type="checkbox" id="sHdhub"> HdHub</label>
-        <label>Max quality
-          <select id="sQuality">
-            <option value="1080p">1080p (recommended)</option>
-            <option value="720p">720p</option>
+    <!-- Panel 3: Rows (#view-rows) -->
+    <div class="view-panel" id="view-rows">
+      <div class="view-header">
+        <h2 class="view-title">Row Settings (Tuning Knobs)</h2>
+        <p class="view-subtitle">Fine-tune release windows, rating floors, and vote thresholds. Changes apply on the next catalog rebuild.</p>
+      </div>
+
+      <div class="toast info" style="margin-bottom:16px;">
+        <div>
+          <strong>Note on Row Knobs:</strong>
+          Window ya rating badalne ke baad <b>Rebuild Catalogs</b> dabana zaroori hai, tabhi naye items Nuvio me aayenge.
+        </div>
+      </div>
+
+      <div class="knob-grid" id="knobList"></div>
+    </div>
+
+    <!-- Panel 4: Streams (#view-streams) -->
+    <div class="view-panel" id="view-streams">
+      <div class="view-header">
+        <h2 class="view-title">Stream Sources &amp; Video Quality</h2>
+        <p class="view-subtitle">Stream changes take effect immediately without requiring a rebuild (~60s server cache).</p>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Stream Providers</h3>
+        </div>
+        <p class="card-desc">Kaunse search engines se streams fetch karni hain. Streams are fetched in parallel with a 7-second cutoff; disabled scrapers are skipped immediately.</p>
+
+        <div class="stream-card-row">
+          <div class="stream-provider-info">
+            <strong>Torrentio</strong>
+            <span>High-speed P2P torrent search provider</span>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="streamTorrentio">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="stream-card-row">
+          <div class="stream-provider-info">
+            <strong>Comet</strong>
+            <span>Fast multi-source stream aggregator</span>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="streamComet">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="stream-card-row">
+          <div class="stream-provider-info">
+            <strong>HdHub</strong>
+            <span>Dedicated Indian &amp; Hindi stream crawler</span>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="streamHdhub">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Maximum Video Quality</h3>
+        </div>
+        <p class="card-desc">1080p recommended hai. 4K and CAM rips are always blocked to ensure instant, buffer-free playback on Indian home broadband.</p>
+
+        <div style="max-width: 320px; margin-top: 8px;">
+          <select id="streamMaxQuality" style="width: 100%;">
+            <option value="1080p">1080p Full HD (Recommended)</option>
+            <option value="720p">720p HD (Data Saver)</option>
           </select>
-        </label>
+        </div>
       </div>
-      <p class="muted">Stream changes apply immediately (no rebuild needed). 1080p cap stays the default — 4K is never served.</p>
     </div>
 
-    <div class="card">
-      <div class="row">
-        <button id="saveBtn">Save settings</button>
-        <button id="rebuildBtn" class="danger">Manual Rebuild</button>
-        <span id="msg"></span>
+    <!-- Panel 5: Rebuild (#view-rebuild) -->
+    <div class="view-panel" id="view-rebuild">
+      <div class="view-header">
+        <h2 class="view-title">Rebuild Catalogs</h2>
+        <p class="view-subtitle">Manually trigger the catalog builder to fetch fresh movies from TMDB and regenerate all 27 rows.</p>
       </div>
-      <p class="muted">Manual Rebuild runs the same build as the daily cron (05:00 UTC = 10:30 IST) and takes ~30–60 seconds. Keep this tab open until it reports done, then the counts above refresh.</p>
+
+      <div class="card rebuild-console">
+        <div class="rebuild-icon">⚡</div>
+        <h3 style="font-size:18px; margin-bottom:8px;">Generate Fresh Catalogs Now</h3>
+        <p style="color:var(--text-secondary); font-size:13px; max-width:540px; margin:0 auto 20px; line-height:1.5;">
+          TMDB se fresh movies fetch karke naye rows banata hai (~45 sec lagte hain). Tab band mat karna — builder 27 rows generate kar raha hai.
+        </p>
+
+        <button class="btn-danger" id="rebuildActionBtn">Rebuild Catalogs Now</button>
+
+        <div id="rebuildProgressBox" style="display:none; margin-top:20px;">
+          <div style="display:inline-flex; align-items:center; gap:8px; font-size:14px; font-weight:600; color:#60a5fa;">
+            <span id="rebuildSpinner">⏳</span>
+            <span id="rebuildProgressText">Rebuilding catalogs… 00:00 / ~00:45</span>
+          </div>
+          <p style="color:var(--text-tertiary); font-size:12px; margin-top:6px;">
+            Tab band mat karna — builder TMDB se 27 rows generate kar raha hai.
+          </p>
+        </div>
+
+        <div class="rebuild-status-box" id="rebuildResultBox" style="display:none;"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Sticky Mobile Action Bar -->
+<div id="mobile-bottom-bar">
+  <button class="save-btn" id="mobileSaveBtn">Save Settings</button>
+  <button class="signout-btn" id="mobileSignOutBtn" style="width:auto; padding:10px 14px;">Sign Out</button>
+</div>
+
+<!-- 401 Session Recovery Modal (#authModal) -->
+<div id="authModal" class="modal-backdrop" style="display: none;">
+  <div class="modal-card">
+    <h3 style="font-size:17px; margin-bottom:8px; color:var(--text-primary);">Session Expired</h3>
+    <p style="color:var(--text-secondary); font-size:13px; margin-bottom:18px; line-height:1.5;">
+      Your session expired or the admin password was rejected. Please re-enter your password to save your pending changes without losing them.
+    </p>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      <input type="password" id="modalPw" placeholder="Admin password">
+      <div id="modalError" style="font-size:12px; color:var(--accent-crimson); min-height:16px;"></div>
+      <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:6px;">
+        <button type="button" class="signout-btn" id="modalCancelBtn" style="width:auto;">Dismiss</button>
+        <button type="button" class="btn-primary" id="modalSubmitBtn">Authenticate &amp; Save</button>
+      </div>
     </div>
   </div>
-</main>
+</div>
+
 <script>
-let pw = sessionStorage.getItem('bs-admin-pw') || '';
-let cfg = null;
-let status = null;
+(() => {
+  'use strict';
 
-const $ = (id) => document.getElementById(id);
-function headers() { return { 'X-Admin-Password': pw, 'Content-Type': 'application/json' }; }
-function setMsg(t, cls) { const m = $('msg'); m.textContent = t; m.className = cls || ''; }
+  // --- State Architecture (§7.4) ---
+  let pw = sessionStorage.getItem('bs-admin-pw') || '';
+  let savedConfig = null; // Deep clone of saved configuration
+  let draftConfig = null; // In-memory working copy mutated by edits
+  let statusData = null;  // Cached status from /admin/api/status
+  let isSaving = false;
+  let isRebuilding = false;
+  let rebuildTimer = null;
+  let rebuildSeconds = 0;
 
-async function api(path, opts) {
-  const r = await fetch(path, opts);
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
-  return j;
-}
-
-function renderStatus() {
-  if (!status) return;
-  const g = $('statusGrid');
-  const pill = (ok, a, b) => '<span class="pill ' + (ok ? '' : 'off') + '">' + (ok ? a : b) + '</span>';
-  g.innerHTML =
-    '<div><b>Version</b><span>' + status.version + '</span></div>' +
-    '<div><b>TMDB key</b><span>' + pill(status.tmdbKeySet, 'Set', 'NOT SET') + '</span></div>' +
-    '<div><b>Blob store</b><span>' + pill(status.blobSet, 'Connected', 'NOT SET') + '</span></div>' +
-    '<div><b>Last rebuild</b><span>' + (status.lastBuiltAt ? new Date(status.lastBuiltAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST' : '—') + '</span></div>' +
-    '<div><b>Next cron</b><span>' + status.nextCron + '</span></div>' +
-    '<div><b>Live URL</b><span><a href="' + status.liveUrl + '" target="_blank" rel="noopener">open</a></span></div>';
-  $('projectLink').href = status.projectUrl;
-}
-
-function renderCatalogs() {
-  const body = $('catalogBody');
-  const ids = Object.keys(cfg.catalogs).sort((a, b) => (cfg.catalogs[a].order ?? 999) - (cfg.catalogs[b].order ?? 999));
-  const counts = {};
-  (status?.catalogs || []).forEach((c) => { counts[c.id] = c; });
-  $('catalogSummary').textContent = '— ' + ids.filter((id) => cfg.catalogs[id].enabled !== false).length + ' of ' + ids.length + ' shown';
-  body.innerHTML = ids.map((id) => {
-    const c = cfg.catalogs[id];
-    const s = counts[id] || { count: '—', top: [] };
-    return '<tr>' +
-      '<td><input type="checkbox" data-cat="' + id + '" data-field="enabled" ' + (c.enabled !== false ? 'checked' : '') + '></td>' +
-      '<td><input type="text" class="name" data-cat="' + id + '" data-field="name" value="' + escapeHtml(c.name) + '"></td>' +
-      '<td>' + (id.endsWith('-series') ? 'Series' : 'Movie') + '</td>' +
-      '<td>' + (c.enabled === false ? '<span class="pill off">hidden</span>' : '<span class="pill">' + s.count + ' items</span>') + '</td>' +
-      '<td class="muted">' + escapeHtml((s.top || []).join(', ')) + '</td>' +
-      '<td><button class="secondary" data-move="' + id + '" data-dir="-1" title="Move up">↑</button> ' +
-      '<button class="secondary" data-move="' + id + '" data-dir="1" title="Move down">↓</button></td>' +
-      '</tr>';
-  }).join('');
-  body.querySelectorAll('[data-cat]').forEach((el) => {
-    el.addEventListener('change', () => {
-      const id = el.dataset.cat;
-      cfg.catalogs[id][el.dataset.field] = el.type === 'checkbox' ? el.checked : el.value;
-      renderCatalogs();
-    });
-  });
-  body.querySelectorAll('[data-move]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const id = btn.dataset.move, dir = parseInt(btn.dataset.dir, 10);
-      const ids = Object.keys(cfg.catalogs).sort((a, b) => (cfg.catalogs[a].order ?? 999) - (cfg.catalogs[b].order ?? 999));
-      const i = ids.indexOf(id), j = i + dir;
-      if (j < 0 || j >= ids.length) return;
-      const tmp = cfg.catalogs[ids[i]].order;
-      cfg.catalogs[ids[i]].order = cfg.catalogs[ids[j]].order;
-      cfg.catalogs[ids[j]].order = tmp;
-      renderCatalogs();
-    });
-  });
-}
-
-const KNOB_LABELS = {
-  'fresh-digital-drops': 'Fresh Digital Drops', 'latest-indian-ott': 'Latest Indian Movies — OTT Ready',
-  'latest-indian-series': 'Latest Indian Web Series', 'releasing-next-30-days': 'Releasing Next 30 Days',
-  'big-announcements': 'Big Announcements', 'newly-announced-series': 'Newly Announced Web Series',
-  'returning-soon': 'New Season Returning Soon', 'now-in-theatres': 'Now in Theatres',
-  'south-blockbusters': 'South Indian Blockbusters', 'underrated-gems': 'Underrated Indian Gems',
-  'scifi-time-travel': 'Sci-Fi & Time Travel', 'psychological-thrillers': 'Psychological Thrillers',
-  'action-heist-revenge': 'Action, Heist & Revenge', 'one-season-miniseries': '1-Season Mini-Series',
-  'visual-spectacles': 'Visual Spectacles', 'action-anime': 'Action & Dark Anime',
-  'all-time-classics': 'All-Time Classics', 'dark-crime': 'Dark Crime & Thrillers',
-};
-
-function renderKnobs() {
-  const g = $('knobGrid');
-  g.innerHTML = Object.keys(cfg.knobs).map((key) => {
-    const k = cfg.knobs[key];
-    const fields = [];
-    if (typeof k.windowDays === 'number') fields.push('<label>Window (days)<input type="number" min="1" max="1825" data-knob="' + key + '" data-field="windowDays" value="' + k.windowDays + '"></label>');
-    if (typeof k.voteFloor === 'number') fields.push('<label>Vote floor (0–10)<input type="number" min="0" max="10" step="0.1" data-knob="' + key + '" data-field="voteFloor" value="' + k.voteFloor + '"></label>');
-    if (typeof k.voteCountFloor === 'number') fields.push('<label>Min votes<input type="number" min="0" step="100" data-knob="' + key + '" data-field="voteCountFloor" value="' + k.voteCountFloor + '"></label>');
-    if (typeof k.voteCountCeil === 'number') fields.push('<label>Max votes<input type="number" min="0" step="100" data-knob="' + key + '" data-field="voteCountCeil" value="' + k.voteCountCeil + '"></label>');
-    return '<div class="knob"><b>' + escapeHtml(KNOB_LABELS[key] || key) + '</b>' + fields.join('') + '</div>';
-  }).join('');
-  g.querySelectorAll('[data-knob]').forEach((el) => {
-    el.addEventListener('change', () => {
-      cfg.knobs[el.dataset.knob][el.dataset.field] = parseFloat(el.value);
-    });
-  });
-}
-
-function renderStreams() {
-  const s = cfg.streams || {};
-  $('sTorrentio').checked = s.torrentio !== false;
-  $('sComet').checked = s.comet !== false;
-  $('sHdhub').checked = s.hdhub !== false;
-  $('sQuality').value = s.maxQuality || '1080p';
-}
-
-function escapeHtml(s) {
-  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-async function loadAll() {
-  const c = await api('/admin/api/config', { headers: headers() });
-  cfg = c.config;
-  status = await api('/admin/api/status', { headers: headers() });
-  renderStatus(); renderCatalogs(); renderKnobs(); renderStreams();
-  $('login').style.display = 'none';
-  $('app').style.display = 'block';
-}
-
-async function login() {
-  pw = $('pw').value.trim();
-  if (!pw) return;
-  try {
-    sessionStorage.setItem('bs-admin-pw', pw);
-    await loadAll();
-    $('loginMsg').textContent = '';
-  } catch (e) {
-    $('loginMsg').textContent = 'Could not sign in: ' + e.message;
-    pw = '';
-    sessionStorage.removeItem('bs-admin-pw');
-  }
-}
-
-$('loginBtn').addEventListener('click', login);
-$('pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
-
-$('saveBtn').addEventListener('click', async () => {
-  cfg.streams = {
-    torrentio: $('sTorrentio').checked,
-    comet: $('sComet').checked,
-    hdhub: $('sHdhub').checked,
-    maxQuality: $('sQuality').value,
+  // Knob display labels
+  const KNOB_LABELS = {
+    'fresh-digital-drops': 'Fresh Digital Drops',
+    'latest-indian-ott': 'Latest Indian Movies — OTT Ready',
+    'latest-indian-series': 'Latest Indian Web Series',
+    'releasing-next-30-days': 'Releasing Next 30 Days',
+    'big-announcements': 'Big Announcements 2026–2027',
+    'newly-announced-series': 'Newly Announced Web Series',
+    'returning-soon': 'New Season Returning Soon',
+    'now-in-theatres': 'Now in Theatres',
+    'south-blockbusters': 'South Indian Blockbusters',
+    'underrated-gems': 'Underrated Indian Gems',
+    'scifi-time-travel': 'Mind-Bending Sci-Fi & Time Travel',
+    'psychological-thrillers': 'High-Tension Psychological Thrillers',
+    'action-heist-revenge': 'Adrenaline Action, Heist & Revenge',
+    'one-season-miniseries': '1-Season Binge Mini-Series',
+    'visual-spectacles': '4K IMAX Visual Spectacles',
+    'action-anime': 'Top Action & Dark Anime',
+    'all-time-classics': 'All-Time Classics',
+    'dark-crime': 'Indian Dark Crime & Thrillers',
   };
-  setMsg('Saving…');
-  try {
-    const r = await api('/admin/api/config', { method: 'POST', headers: headers(), body: JSON.stringify(cfg) });
-    cfg = r.config;
-    setMsg('Saved. Catalog name/order changes show in the manifest within ~1 minute; row content changes need a Rebuild.', 'ok');
+
+  const $ = (id) => document.getElementById(id);
+
+  function escapeHtml(str) {
+    return String(str == null ? '' : str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function headers() {
+    return {
+      'X-Admin-Password': pw,
+      'Content-Type': 'application/json',
+    };
+  }
+
+  async function apiFetch(url, options = {}) {
+    const res = await fetch(url, options);
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(json.error || `HTTP ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return json;
+  }
+
+  // --- Dirty State Tracking (§7.4.1) ---
+  function isDirty() {
+    if (!savedConfig || !draftConfig) return false;
+    return JSON.stringify(savedConfig) !== JSON.stringify(draftConfig);
+  }
+
+  function updateDirtyIndicator() {
+    const dirty = isDirty();
+    const saveBtn = $('sidebarSaveBtn');
+    const mobileSaveBtn = $('mobileSaveBtn');
+    const label = dirty ? 'Save Settings ●' : 'Save Settings';
+
+    if (saveBtn) {
+      saveBtn.textContent = isSaving ? 'Saving changes…' : label;
+      saveBtn.classList.toggle('dirty', dirty);
+    }
+    if (mobileSaveBtn) {
+      mobileSaveBtn.textContent = isSaving ? 'Saving changes…' : label;
+      mobileSaveBtn.classList.toggle('dirty', dirty);
+    }
+  }
+
+  window.addEventListener('beforeunload', (e) => {
+    if (isDirty()) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+
+  // --- Toasts & Notifications ---
+  function showToast(title, message, type = 'info', sticky = false) {
+    const container = $('toastArea');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+      <div>
+        <strong>${escapeHtml(title)}</strong>
+        <div>${escapeHtml(message)}</div>
+      </div>
+      <button type="button" class="toast-close" title="Dismiss">×</button>
+    `;
+    toast.querySelector('.toast-close').addEventListener('click', () => toast.remove());
+    container.appendChild(toast);
+
+    if (!sticky) {
+      setTimeout(() => {
+        if (toast.isConnected) toast.remove();
+      }, 7000);
+    }
+  }
+
+  // --- Navigation & View Switching ---
+  function setupNavigation() {
+    const navButtons = document.querySelectorAll('.nav-btn');
+    navButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const viewId = btn.dataset.view;
+        switchView(viewId);
+      });
+    });
+  }
+
+  function switchView(viewId) {
+    document.querySelectorAll('.nav-btn').forEach((b) => {
+      b.classList.toggle('active', b.dataset.view === viewId);
+    });
+    document.querySelectorAll('.view-panel').forEach((p) => {
+      p.classList.toggle('active', p.id === `view-${viewId}`);
+    });
+  }
+
+  // --- Render Panel 1: Overview ---
+  function renderOverview() {
+    if (!statusData) return;
+    const isOnline = statusData.tmdbKeySet && statusData.blobSet;
+    const dot = $('statusDot');
+    const dotLabel = $('statusDotLabel');
+
+    dot.classList.toggle('online', isOnline);
+    dotLabel.textContent = isOnline ? 'Connected' : 'Config Issue';
+
+    $('diagAddonName').textContent = statusData.addon || 'Binge Addon';
+
+    const tmdbPill = $('diagTmdbPill');
+    if (statusData.tmdbKeySet) {
+      $('diagTmdbStatus').textContent = 'Connected';
+      tmdbPill.className = 'pill success';
+      tmdbPill.textContent = 'API Key Set';
+    } else {
+      $('diagTmdbStatus').textContent = 'Missing Key';
+      tmdbPill.className = 'pill danger';
+      tmdbPill.textContent = 'Not Set';
+    }
+
+    const blobPill = $('diagBlobPill');
+    if (statusData.blobSet) {
+      $('diagBlobStatus').textContent = 'Connected';
+      blobPill.className = 'pill success';
+      blobPill.textContent = 'Blob Store Active';
+    } else {
+      $('diagBlobStatus').textContent = 'Disconnected';
+      blobPill.className = 'pill danger';
+      blobPill.textContent = 'Token Missing';
+    }
+
+    const catalogsList = statusData.catalogs || [];
+    const activeCount = catalogsList.filter((c) => !c.disabled).length;
+    $('diagCatalogCount').textContent = `${activeCount} of ${catalogsList.length} visible`;
+
+    const totalItems = catalogsList.reduce((acc, c) => acc + (c.count || 0), 0);
+    $('diagItemsCount').textContent = `${totalItems} items cached`;
+
+    if (statusData.lastBuiltAt) {
+      const d = new Date(statusData.lastBuiltAt);
+      $('diagLastBuilt').textContent = d.toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }) + ' IST';
+    } else {
+      $('diagLastBuilt').textContent = 'Never / Pending';
+    }
+
+    const liveUrl = statusData.liveUrl || 'https://binge-addon-httpbasant2-9067s-projects.vercel.app';
+    const projUrl = statusData.projectUrl || 'https://vercel.com/httpbasant2-9067s-projects/binge-addon';
+
+    $('linkManifest').href = `${liveUrl}/manifest.json`;
+    $('linkBadges').href = `${liveUrl}/badges.json`;
+    $('linkLiveUrl').href = liveUrl;
+    $('linkProjectUrl').href = projUrl;
+    $('linkHealth').href = `${liveUrl}/health`;
+  }
+
+  // --- Render Panel 2: Catalogs ---
+  function renderCatalogs() {
+    if (!draftConfig || !draftConfig.catalogs) return;
+    const container = $('catalogList');
+    const ids = Object.keys(draftConfig.catalogs).sort(
+      (a, b) => (draftConfig.catalogs[a].order ?? 999) - (draftConfig.catalogs[b].order ?? 999)
+    );
+
+    const statusCounts = {};
+    (statusData?.catalogs || []).forEach((c) => { statusCounts[c.id] = c; });
+
+    const activeCount = ids.filter((id) => draftConfig.catalogs[id].enabled !== false).length;
+    $('catCountSummary').textContent = `Showing ${activeCount} of ${ids.length} rows in Nuvio`;
+
+    container.innerHTML = ids.map((id) => {
+      const c = draftConfig.catalogs[id];
+      const s = statusCounts[id] || { count: '—', top: [] };
+      const isEnabled = c.enabled !== false;
+      const isSeries = id.endsWith('-series');
+      const topStr = (s.top && s.top.length) ? s.top.join(', ') : 'No preview items';
+
+      return `
+        <div class="cat-card ${isEnabled ? '' : 'dimmed'}" id="catCard-${id}" data-cat-id="${id}">
+          <div class="cat-toggle-col">
+            <label class="toggle-switch" title="${isEnabled ? 'Visible in Nuvio' : 'Hidden from Nuvio'}">
+              <input type="checkbox" class="cat-enable-toggle" data-cat="${id}" ${isEnabled ? 'checked' : ''}>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="cat-main-col">
+            <input type="text" class="cat-name-input" data-cat="${id}" value="${escapeHtml(c.name || id)}">
+            <div class="cat-meta-badges">
+              <span class="pill neutral">${isSeries ? 'Series' : 'Movie'}</span>
+              <span class="pill ${isEnabled ? 'success' : 'danger'}" id="catStatusPill-${id}">
+                ${isEnabled ? 'Active' : 'Hidden from Nuvio'}
+              </span>
+              <span class="pill info" id="catCountPill-${id}">${s.count} items</span>
+            </div>
+            <div class="cat-titles-preview" title="${escapeHtml(topStr)}">
+              Top: ${escapeHtml(topStr)}
+            </div>
+          </div>
+          <div class="cat-order-col">
+            <button class="btn-icon" data-move="${id}" data-dir="-1" title="Move up">↑</button>
+            <button class="btn-icon" data-move="${id}" data-dir="1" title="Move down">↓</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Targeted DOM listeners to preserve focus (§7.4.4)
+    container.querySelectorAll('.cat-name-input').forEach((input) => {
+      input.addEventListener('input', () => {
+        const id = input.dataset.cat;
+        draftConfig.catalogs[id].name = input.value;
+        updateDirtyIndicator();
+      });
+    });
+
+    container.querySelectorAll('.cat-enable-toggle').forEach((toggle) => {
+      toggle.addEventListener('change', () => {
+        const id = toggle.dataset.cat;
+        const checked = toggle.checked;
+        draftConfig.catalogs[id].enabled = checked;
+
+        // Targeted DOM updates without innerHTML re-render
+        const card = $(`catCard-${id}`);
+        const pill = $(`catStatusPill-${id}`);
+        if (card) card.classList.toggle('dimmed', !checked);
+        if (pill) {
+          pill.className = `pill ${checked ? 'success' : 'danger'}`;
+          pill.textContent = checked ? 'Active' : 'Hidden from Nuvio';
+        }
+
+        const ids = Object.keys(draftConfig.catalogs);
+        const active = ids.filter((k) => draftConfig.catalogs[k].enabled !== false).length;
+        $('catCountSummary').textContent = `Showing ${active} of ${ids.length} rows in Nuvio`;
+
+        updateDirtyIndicator();
+      });
+    });
+
+    container.querySelectorAll('[data-move]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.move;
+        const dir = parseInt(btn.dataset.dir, 10);
+        const sorted = Object.keys(draftConfig.catalogs).sort(
+          (a, b) => (draftConfig.catalogs[a].order ?? 999) - (draftConfig.catalogs[b].order ?? 999)
+        );
+        const idx = sorted.indexOf(id);
+        const targetIdx = idx + dir;
+        if (targetIdx < 0 || targetIdx >= sorted.length) return;
+
+        const tmpOrder = draftConfig.catalogs[sorted[idx]].order;
+        draftConfig.catalogs[sorted[idx]].order = draftConfig.catalogs[sorted[targetIdx]].order;
+        draftConfig.catalogs[sorted[targetIdx]].order = tmpOrder;
+
+        updateDirtyIndicator();
+        renderCatalogs(); // Structural move requires re-ordering
+      });
+    });
+
+    filterCatalogCards();
+  }
+
+  function filterCatalogCards() {
+    const query = ($('catSearchInput').value || '').trim().toLowerCase();
+    document.querySelectorAll('.cat-card').forEach((card) => {
+      const id = card.dataset.catId;
+      const c = draftConfig.catalogs[id] || {};
+      const name = (c.name || '').toLowerCase();
+      const type = id.endsWith('-series') ? 'series' : 'movie';
+      const match = !query || name.includes(query) || id.includes(query) || type.includes(query);
+      card.style.display = match ? 'flex' : 'none';
+    });
+  }
+
+  $('catSearchInput').addEventListener('input', filterCatalogCards);
+
+  // --- Render Panel 3: Rows (Tuning Knobs) ---
+  function renderKnobs() {
+    if (!draftConfig || !draftConfig.knobs) return;
+    const container = $('knobList');
+    const keys = Object.keys(draftConfig.knobs);
+
+    container.innerHTML = keys.map((key) => {
+      const k = draftConfig.knobs[key] || {};
+      const fields = [];
+
+      if (typeof k.windowDays === 'number') {
+        fields.push(`
+          <div class="knob-field">
+            <div class="knob-label-row">
+              <span class="knob-label">Release Window (days)</span>
+              <input type="number" min="1" max="1825" data-knob="${key}" data-field="windowDays" value="${k.windowDays}">
+            </div>
+            <div class="knob-helper">Pichhle kitne dino ki releases dikhani hain (e.g. 45 days).</div>
+          </div>
+        `);
+      }
+
+      if (typeof k.voteFloor === 'number') {
+        fields.push(`
+          <div class="knob-field">
+            <div class="knob-label-row">
+              <span class="knob-label">Minimum Rating (0–10)</span>
+              <input type="number" min="0" max="10" step="0.1" data-knob="${key}" data-field="voteFloor" value="${k.voteFloor}">
+            </div>
+            <div class="knob-helper">Isse kam TMDB rating wali movies filter out ho jayengi.</div>
+          </div>
+        `);
+      }
+
+      if (typeof k.voteCountFloor === 'number') {
+        fields.push(`
+          <div class="knob-field">
+            <div class="knob-label-row">
+              <span class="knob-label">Minimum Votes Required</span>
+              <input type="number" min="0" step="100" data-knob="${key}" data-field="voteCountFloor" value="${k.voteCountFloor}">
+            </div>
+            <div class="knob-helper">Kam se kam itne logon ne vote kiya ho, taaki bekar movies na aayein.</div>
+          </div>
+        `);
+      }
+
+      if (typeof k.voteCountCeil === 'number') {
+        fields.push(`
+          <div class="knob-field">
+            <div class="knob-label-row">
+              <span class="knob-label">Maximum votes</span>
+              <input type="number" min="0" step="100" data-knob="${key}" data-field="voteCountCeil" value="${k.voteCountCeil}">
+            </div>
+            <div class="knob-helper">Isse zyada votes wali popular movies filter out ho jayengi taaki sirf chhupi hui gems dikhein.</div>
+          </div>
+        `);
+      }
+
+      return `
+        <div class="knob-card">
+          <div class="knob-title">${escapeHtml(KNOB_LABELS[key] || key)}</div>
+          ${fields.join('')}
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('[data-knob]').forEach((input) => {
+      input.addEventListener('change', () => {
+        const key = input.dataset.knob;
+        const field = input.dataset.field;
+        const val = parseFloat(input.value);
+        if (!isNaN(val)) {
+          draftConfig.knobs[key][field] = val;
+          updateDirtyIndicator();
+        }
+      });
+    });
+  }
+
+  // --- Render Panel 4: Streams ---
+  function renderStreams() {
+    if (!draftConfig || !draftConfig.streams) return;
+    const s = draftConfig.streams;
+    $('streamTorrentio').checked = s.torrentio !== false;
+    $('streamComet').checked = s.comet !== false;
+    $('streamHdhub').checked = s.hdhub !== false;
+    $('streamMaxQuality').value = s.maxQuality || '1080p';
+  }
+
+  function setupStreamListeners() {
+    $('streamTorrentio').addEventListener('change', (e) => {
+      draftConfig.streams.torrentio = e.target.checked;
+      updateDirtyIndicator();
+    });
+    $('streamComet').addEventListener('change', (e) => {
+      draftConfig.streams.comet = e.target.checked;
+      updateDirtyIndicator();
+    });
+    $('streamHdhub').addEventListener('change', (e) => {
+      draftConfig.streams.hdhub = e.target.checked;
+      updateDirtyIndicator();
+    });
+    $('streamMaxQuality').addEventListener('change', (e) => {
+      draftConfig.streams.maxQuality = e.target.value;
+      updateDirtyIndicator();
+    });
+  }
+
+  // --- Unified Save Flow (§7.1, §7.4.2, §7.4.3) ---
+  async function saveSettings() {
+    if (isSaving) return;
+    isSaving = true;
+    updateDirtyIndicator();
+
+    try {
+      const res = await apiFetch('/admin/api/config', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify(draftConfig),
+      });
+
+      // Synchronize in-memory saved snapshot
+      savedConfig = JSON.parse(JSON.stringify(res.config));
+      draftConfig = JSON.parse(JSON.stringify(savedConfig));
+      isSaving = false;
+      updateDirtyIndicator();
+
+      showToast(
+        'Settings Saved!',
+        'Nuvio me ~1 minute me dikhega. Nuvio ko refresh ya restart kar lo.',
+        'success'
+      );
+    } catch (err) {
+      isSaving = false;
+      updateDirtyIndicator();
+
+      if (err.status === 401) {
+        // Trigger non-destructive session recovery modal (§7.4.2)
+        showAuthModal();
+      } else {
+        showToast(
+          `Save Failed: ${err.message}`,
+          'Your edits are safely kept in your browser. Check your connection and click Save Settings to retry.',
+          'error',
+          true
+        );
+      }
+    }
+  }
+
+  $('sidebarSaveBtn').addEventListener('click', saveSettings);
+  $('mobileSaveBtn').addEventListener('click', saveSettings);
+
+  // --- 401 Session Recovery Modal Logic (§7.4.2) ---
+  function showAuthModal() {
+    const modal = $('authModal');
+    const input = $('modalPw');
+    input.value = '';
+    $('modalError').textContent = '';
+    modal.style.display = 'flex';
+    input.focus();
+  }
+
+  function hideAuthModal() {
+    $('authModal').style.display = 'none';
+  }
+
+  async function handleAuthModalSubmit() {
+    const newPw = $('modalPw').value.trim();
+    if (!newPw) return;
+
+    $('modalError').textContent = 'Verifying password…';
+    try {
+      // Validate password against config endpoint
+      await apiFetch('/admin/api/config', {
+        headers: { 'X-Admin-Password': newPw },
+      });
+
+      // Valid: update session & pw
+      pw = newPw;
+      sessionStorage.setItem('bs-admin-pw', pw);
+      hideAuthModal();
+
+      // Automatically retry the pending save without losing edits
+      await saveSettings();
+    } catch (err) {
+      $('modalError').textContent = 'Invalid password. Please try again.';
+    }
+  }
+
+  $('modalSubmitBtn').addEventListener('click', handleAuthModalSubmit);
+  $('modalCancelBtn').addEventListener('click', hideAuthModal);
+  $('modalPw').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') handleAuthModalSubmit();
+  });
+
+  // --- Manual Catalog Rebuild Flow (§7.3) ---
+  function startRebuildTimer() {
+    rebuildSeconds = 0;
+    $('rebuildProgressBox').style.display = 'block';
+    $('rebuildActionBtn').disabled = true;
+    $('rebuildResultBox').style.display = 'none';
+
+    rebuildTimer = setInterval(() => {
+      rebuildSeconds++;
+      const mm = String(Math.floor(rebuildSeconds / 60)).padStart(2, '0');
+      const ss = String(rebuildSeconds % 60).padStart(2, '0');
+      $('rebuildProgressText').textContent = `Rebuilding catalogs… ${mm}:${ss} / ~00:45`;
+    }, 1000);
+  }
+
+  function stopRebuildTimer() {
+    clearInterval(rebuildTimer);
+    rebuildTimer = null;
+    $('rebuildProgressBox').style.display = 'none';
+    $('rebuildActionBtn').disabled = false;
+  }
+
+  async function triggerRebuild() {
+    if (isRebuilding) return;
+    isRebuilding = true;
+    startRebuildTimer();
+
+    try {
+      const res = await apiFetch('/api/admin/rebuild', {
+        method: 'POST',
+        headers: headers(),
+      });
+
+      stopRebuildTimer();
+      isRebuilding = false;
+
+      if (res.skipped) {
+        showToast('Rebuild Skipped', res.error || 'Prerequisites missing', 'error');
+        const box = $('rebuildResultBox');
+        box.style.display = 'block';
+        box.innerHTML = `<span style="color:var(--accent-crimson);">⚠️ Rebuild Skipped: ${escapeHtml(res.error || 'Unknown reason')}</span>`;
+      } else {
+        const counts = res.counts || {};
+        const totalItems = Object.values(counts).reduce((a, b) => a + b, 0);
+        const rowsCount = Object.keys(counts).length;
+
+        showToast(
+          'Rebuild Done!',
+          `${rowsCount} rows updated. Total items: ${totalItems}. Trending Indian Movie: ${counts['trending-indian-movie'] ?? 0} · Series: ${counts['trending-indian-series'] ?? 0}`,
+          'success'
+        );
+
+        const box = $('rebuildResultBox');
+        box.style.display = 'block';
+        box.innerHTML = `
+          <div style="color:var(--status-success); font-weight:600; margin-bottom:6px;">✓ Rebuild Completed Successfully (${rebuildSeconds}s)</div>
+          <div>Rows updated: ${rowsCount} | Total items: ${totalItems}</div>
+          <div>Trending Indian Movie: ${counts['trending-indian-movie'] ?? 0} items | Series: ${counts['trending-indian-series'] ?? 0} items</div>
+        `;
+
+        // Auto-refresh status without full page reload
+        try {
+          statusData = await apiFetch('/admin/api/status', { headers: headers() });
+          renderOverview();
+          renderCatalogs();
+        } catch (e) {
+          console.error('Status refresh error:', e);
+        }
+      }
+    } catch (err) {
+      stopRebuildTimer();
+      isRebuilding = false;
+
+      showToast(`Rebuild Failed: ${err.message}`, 'Check logs or try again.', 'error');
+      const box = $('rebuildResultBox');
+      box.style.display = 'block';
+      box.innerHTML = `<span style="color:var(--accent-crimson);">✗ Rebuild Failed: ${escapeHtml(err.message)}</span>`;
+    }
+  }
+
+  $('rebuildActionBtn').addEventListener('click', triggerRebuild);
+
+  // --- Initial Data Load ---
+  async function loadDashboard() {
+    const configRes = await apiFetch('/admin/api/config', { headers: headers() });
+    savedConfig = JSON.parse(JSON.stringify(configRes.config));
+    draftConfig = JSON.parse(JSON.stringify(savedConfig));
+
+    try {
+      statusData = await apiFetch('/admin/api/status', { headers: headers() });
+    } catch (err) {
+      console.warn('Status fetch error:', err);
+    }
+
+    renderOverview();
     renderCatalogs();
-  } catch (e) { setMsg('Save failed: ' + e.message, 'err'); }
-});
+    renderKnobs();
+    renderStreams();
+    updateDirtyIndicator();
 
-$('rebuildBtn').addEventListener('click', async () => {
-  setMsg('Rebuilding… this takes ~30–60 seconds, keep this tab open.');
-  $('rebuildBtn').disabled = true;
-  try {
-    // Same build path as the daily cron endpoint.
-    const r = await fetch('/api/cron/rebuild');
-    const j = await r.json().catch(() => ({}));
-    if (!j.ok) throw new Error(j.error || 'rebuild failed');
-    const total = j.counts ? Object.values(j.counts).reduce((a, b) => a + b, 0) : '?';
-    const rows = j.counts ? Object.keys(j.counts).length : '?';
-    setMsg('Rebuild done: ' + rows + ' rows, ' + total + ' items. Trending Indian movie ' +
-      (j.counts ? (j.counts['trending-indian-movie'] ?? '—') : '—') + ', series ' +
-      (j.counts ? (j.counts['trending-indian-series'] ?? '—') : '—') + '.', 'ok');
-    status = await api('/admin/api/status', { headers: headers() });
-    renderStatus(); renderCatalogs();
-  } catch (e) { setMsg('Rebuild failed: ' + e.message, 'err'); }
-  $('rebuildBtn').disabled = false;
-});
+    $('view-login').style.display = 'none';
+    $('app').style.display = 'flex';
+  }
 
-if (pw) { loadAll().catch(() => { $('login').style.display = 'block'; }); }
+  // --- Login & Sign Out ---
+  async function doLogin() {
+    const val = $('loginPw').value.trim();
+    if (!val) return;
+    pw = val;
+    $('loginErrorMsg').textContent = 'Verifying credentials…';
+
+    try {
+      sessionStorage.setItem('bs-admin-pw', pw);
+      await loadDashboard();
+      $('loginErrorMsg').textContent = '';
+    } catch (err) {
+      sessionStorage.removeItem('bs-admin-pw');
+      pw = '';
+      $('loginErrorMsg').textContent = err.status === 401
+        ? 'Wrong password. Please try again.'
+        : `Sign in error: ${err.message}`;
+    }
+  }
+
+  function doSignOut() {
+    sessionStorage.removeItem('bs-admin-pw');
+    pw = '';
+    savedConfig = null;
+    draftConfig = null;
+    statusData = null;
+    $('app').style.display = 'none';
+    $('view-login').style.display = 'flex';
+    $('loginPw').value = '';
+    $('loginErrorMsg').textContent = '';
+  }
+
+  $('loginSubmitBtn').addEventListener('click', doLogin);
+  $('loginPw').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') doLogin();
+  });
+
+  $('loginPwToggle').addEventListener('click', () => {
+    const inp = $('loginPw');
+    const isPw = inp.type === 'password';
+    inp.type = isPw ? 'text' : 'password';
+    $('loginPwToggle').textContent = isPw ? 'Hide' : 'Show';
+  });
+
+  $('sidebarSignOutBtn').addEventListener('click', doSignOut);
+  $('mobileSignOutBtn').addEventListener('click', doSignOut);
+
+  // Bootstrap
+  setupNavigation();
+  setupStreamListeners();
+
+  if (pw) {
+    loadDashboard().catch(() => {
+      $('view-login').style.display = 'flex';
+    });
+  } else {
+    $('view-login').style.display = 'flex';
+  }
+})();
 </script>
 </body>
 </html>
