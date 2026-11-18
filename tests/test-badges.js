@@ -1,5 +1,7 @@
-// Binge Addon v1.0.5 — badge-pack rule test.
-// v1.0.5: every filter carries a real imageURL (addon-hosted PNG);
+// Binge Addon v1.0.6 — badge-pack rule test.
+// v1.0.6: minimal pack — 23 badges (15 dropped: encoder + channels +
+// audio jargon). Patterns of kept badges UNCHANGED; every filter still
+// carries a real imageURL (addon-hosted PNG);
 // the assertion below checks that exact URL instead of the v1.0.4
 // text-only '' value. Patterns, groups and badge list unchanged.
 // Loads app/lib/badges.json (or the LIVE pack when BADGES_URL is set),
@@ -37,7 +39,8 @@ async function getJSON(url) {
 
   // --- 1. Schema validation -----------------------------------------------
   check(Object.keys(pack).sort().join(',') === 'filters,groups', 'top-level keys are exactly {groups, filters}');
-  check(Array.isArray(pack.groups) && pack.groups.length === 7, `7 groups (got ${pack.groups.length})`);
+  check(Array.isArray(pack.groups) && pack.groups.length === 5, `5 groups (got ${pack.groups.length})`);
+  check(!pack.groups.some((g) => g.id === 'encoder' || g.id === 'channels'), 'no encoder / channels group');
   check(!pack.groups.some((g) => g.id === 'streaming'), 'no Streaming group');
   const groupIds = new Set(pack.groups.map((g) => g.id));
   for (const g of pack.groups) {
@@ -58,7 +61,7 @@ async function getJSON(url) {
     if (/4k|2160/i.test(f.name) || /4k|2160/i.test(f.pattern)) no4k = false;
   }
   check(no4k, 'no 4K / 2160p badge anywhere in the pack');
-  check(pack.filters.length === 38, `38 badges total (got ${pack.filters.length})`);
+  check(pack.filters.length === 23, `23 badges total (got ${pack.filters.length})`);
 
   // --- 2. Compile patterns (strip the (?i) prefix -> 'i' flag; JS RegExp
   // has no inline (?i) flag, Nuvio's badge engine handles the prefix) ---
@@ -93,12 +96,9 @@ async function getJSON(url) {
   check(!matches('dolby-vision', 'DVDRip'), "DV does NOT fire on 'DVDRip'");
   check(matches('dolby-vision', 'DV'), "DV fires on standalone 'DV'");
   check(matches('dolby-vision', 'Dolby Vision'), "Dolby Vision fires on 'Dolby Vision'");
-  check(matches('dd-plus', 'DD+5.1') && !matches('dd', 'DD+5.1'), "DD+ fires, DD suppressed on 'DD+5.1'");
-  check(matches('dd-plus', 'DDP 5.1') && !matches('dd', 'DDP 5.1'), "DDP maps to DD+, DD suppressed");
-  check(matches('dd', 'DD 5.1') && !matches('dd-plus', 'DD 5.1'), "DD fires on standalone 'DD 5.1'");
-  check(matches('dts-hd-ma', 'DTS-HD MA') && !matches('dts', 'DTS-HD MA'), 'DTS-HD MA fires, DTS suppressed');
-  check(matches('dts-hd-ma', 'DTS-HDMA'), 'DTS-HDMA (no space) maps to DTS-HD MA');
-  check(matches('dts', 'DTS') && !matches('dts-hd-ma', 'DTS'), 'DTS fires on standalone DTS');
+  check(matches('dd-plus', 'DD+5.1'), "DD+ fires on 'DD+5.1'");
+  check(matches('dd-plus', 'DDP 5.1'), "DDP maps to DD+");
+  check(!('dd' in byId) && !('dts' in byId) && !('dts-hd-ma' in byId), 'DD / DTS / DTS-HD MA badges are gone (dropped in v1.0.6)');
   check(matches('bluray', 'BluRay') && matches('remux', 'REMUX'), 'REMUX + BluRay both match raw');
   check(badgesFor('REMUX BluRay').quality === 'REMUX', 'Quality group winner: REMUX before BluRay');
   check(matches('lang-hindi', '[Tam + Hin + Mal + Kan]'), "Hindi fires on title token 'Hin'");
@@ -108,9 +108,8 @@ async function getJSON(url) {
   check(matches('lang-telugu', 'Telugu'), "Telugu fires on 'Telugu'");
   check(matches('lang-english', 'Hindi + English'), "English fires on description words 'Hindi + English'");
   check(matches('lang-hindi', 'Hindi + English'), "Hindi fires on description words 'Hindi + English'");
-  check(matches('bit10', '10-Bit') && matches('bit10', '10bit'), '10-Bit fires on 10-Bit / 10bit');
-  check(matches('ch-5-1', 'DD+5.1'), '5.1 fires inside DD+5.1');
-  check(!matches('ch-5-1', '5.10'), '5.1 does NOT fire on 5.10');
+  check(!('bit10' in byId) && !('ch-5-1' in byId) && !('hevc' in byId) && !('x265' in byId) && !('aac' in byId), '10-Bit / 5.1 / HEVC / x265 / AAC badges are gone (dropped in v1.0.6)');
+  check(matches('web-dl', 'WEB-DL') && matches('webrip', 'WEBRip'), 'WEB-DL / WEBRip still fire');
 
   // --- 4. Real live titles --------------------------------------------------
   // The Odyssey tt id from the live Global Trending movie catalog.
@@ -148,16 +147,12 @@ async function getJSON(url) {
     if (/dvdscr|dvdrip/i.test(t.text) && !/\bdv\b/i.test(t.text) && !/dolby\s+vision/i.test(t.text)) {
       check(b.visual !== 'Dolby Vision', `no DV from DVDScr/DVDRip alone :: ${oneLine.slice(0, 80)}`);
     }
-    if (/dd\+|ddp/i.test(t.text)) {
-      // DD+ present: the audio winner must never be plain DD (a higher
-      // audio badge — Atmos/TrueHD/DTS-HD MA — legitimately wins instead).
-      if (b.audio) check(b.audio !== 'DD', `audio winner is not DD on a DD+ title :: ${oneLine.slice(0, 80)}`);
-    }
-    if (/dts-hd\s*ma/i.test(t.text) && b.audio) {
-      check(b.audio !== 'DTS', `DTS-HD MA title never shows plain DTS :: ${oneLine.slice(0, 80)}`);
+    if (/dd\+|ddp/i.test(t.text) && b.audio) {
+      // DD+ present: the audio winner must be DD+ or Atmos (plain DD is gone).
+      check(b.audio === 'DD+' || b.audio === 'Dolby Atmos', `audio winner is DD+/Atmos on a DD+ title :: ${oneLine.slice(0, 80)}`);
     }
   }
-  for (const need of ['1080p', 'HEVC', 'BluRay', 'WEB-DL', 'DD+', 'Hindi', 'English']) {
+  for (const need of ['1080p', 'BluRay', 'WEB-DL', 'DD+', 'Hindi', 'English']) {
     check(seen.has(need), `at least one real title gets ${need}`);
   }
   console.log(`\nBadges seen across real titles: ${[...seen].sort().join(', ')}`);

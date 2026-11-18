@@ -26,7 +26,7 @@ const { readConfig, writeConfig, effectiveCatalogs, normalizeConfig } = require(
 const STREAM_CAP = 40;
 const TMDB_IMG = 'https://image.tmdb.org/t/p';
 const ADDON_NAME = 'binge-addon';
-const VERSION = '1.0.5';
+const VERSION = '1.0.6';
 
 const builder = new addonBuilder(MANIFEST);
 
@@ -162,14 +162,15 @@ app.get('/manifest.json', async (req, res) => {
 });
 
 // --- Badge pack (v1.0.4): Nuvio/Fusion badges served as static JSON.
-// v1.0.5: every filter now carries a real imageURL pointing at the
+// v1.0.6: minimal pack — 23 badges, icon + short text PNGs (see
+// scripts/render-badges-v106.py). Every filter carries a real imageURL.
 // /badges/:id.png route below (PNGs rendered in-app, served by us).
 // Nuvio snapshots the file on import, so later edits need a re-import.
 app.get('/badges.json', (req, res) => {
   res.sendFile(path.join(__dirname, 'lib', 'badges.json'));
 });
 
-// --- Badge images (v1.0.5): GET /badges/:id.png serves the rendered PNG
+// --- Badge images (v1.0.5+): GET /badges/:id.png serves the rendered PNG
 // for one badge. SECURITY: only ids listed in lib/badges.json are ever
 // served (allowlist built at startup); anything else is a 404. The id
 // is validated against the allowlist BEFORE any path is built, and the

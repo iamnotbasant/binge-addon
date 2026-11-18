@@ -1316,3 +1316,83 @@ Date: 18 Nov 2026. Built by Muse subagents on this VM (no external person/compan
   himself (same URL, pack re-imported) and confirms on-device whether it
   now shows 38 Fusion-style badges. That on-device preview is the final
   verdict; nothing here claims it will show 38 until he confirms it.
+
+## v1.0.6 MINIMAL BADGE REDESIGN 18 Nov 2026 (basant's verdict: 7–9 jargon pills per stream)
+
+- **The problem (his Jailer 2 screenshot):** each stream showed 7–9 pills of
+  jargon (1080p, WEB-DL, DD+, AAC, AVC, 5.1, Hindi, English, Tamil…) — a
+  wall of things beyond his understanding. The v1.0.5 pack WORKED in Nuvio;
+  the problem was purely look + jargon. Dashboard files untouched (that is
+  v1.0.7, separate).
+- **What changed (one user-requested change → 1.0.6):**
+  - **DROPPED 15 badges** (from `app/lib/badges.json` + PNGs deleted):
+    whole Encoder group (hevc, x265, avc, x264, bit10), whole Channels
+    group (ch-7-1, ch-5-1, ch-2-0), audio cuts (truehd, dts-hd-ma, dts,
+    dd, aac, flac, opus).
+  - **KEPT 23 badges, patterns UNCHANGED:** remux, bluray, res-1080p,
+    res-720p, res-480p, hdr10plus, hdr10, dolby-vision, hdr, web-dl,
+    webrip, atmos, dd-plus, lang-hindi/english/tamil/telugu/malayalam/
+    kannada/bengali/marathi/gujarati/punjabi. Groups 7 → 5 (encoder +
+    channels deleted). web-dl/webrip moved into the Quality group.
+    A stream now shows at most 4 pills (quality + resolution + audio +
+    language) instead of 7–9.
+  - **ICONS:** every kept badge re-rendered as icon + short-text PNG
+    (same 1200×320 canvas, same dark `#1A1A1A` fill, `#858283` border,
+    white DejaVu Sans Bold). Simple drawn glyphs: speaker (atmos,
+    dd-plus), sun/rays (hdr10plus, hdr10, dolby-vision, hdr), disc
+    (bluray), globe (web-dl + all 10 languages — the language WORD is the
+    label), film frame + play triangle (webrip); plain bold text for
+    REMUX + resolutions. Render script committed as
+    `scripts/render-badges-v106.py` (no render script existed in the repo
+    for v1.0.5). First render had the speaker sound-arcs overlapping the
+    text ("Dolby Atmos" read ")Dolby Atmos") — fixed by centring the arcs
+    on the cone tip inside the icon zone, re-rendered, visually checked.
+    Contact sheet: `tests/badge-contact-sheet-106.png` — all 23 checked
+    by eye: no clipping, all glyphs legible. No icon fell back to text.
+  - **Route unchanged:** `GET /badges/:id.png` allowlist is built from
+    `badges.json` at startup, so deleted ids now 404 automatically.
+  - Version 1.0.5 → **1.0.6** in `app/index.js`, `app/lib/manifest.js`,
+    `app/package.json`, `app/package-lock.json`. No dashboard/admin file
+    touched. Test updated to v1.0.6 semantics (`tests/test-badges.js`:
+    5 groups, 23 badges, dropped-id assertions, DD+/Atmos audio winner).
+- **Local test BEFORE deploy (all PASS):** `GET /badges.json` 200, 5
+  groups, 23 filters, all `imageURL`s addon-hosted; all 23 PNGs valid,
+  1200×320, 7,290–19,349 B; `/badges/hevc.png`, `/badges/ch-5-1.png`,
+  `/badges/aac.png`, `/badges/nonexistent.png` 404;
+  `/badges/../badges.json`, `/badges/%2e%2e%2fbadges.json`,
+  `/badges/.png` 404 (no traversal); `/manifest.json` 1.0.6, 27 catalogs;
+  `/health` 1.0.6; `/admin` 200. Rule test `node tests/test-badges.js`:
+  ALL CHECKS PASS on live titles (max 4 badges/stream seen).
+- **Deploy v1.0.6:** `dpl_AjMcsHmHPfjmdwiP1Txtv9jQRs51` → READY (REST token
+  route, ~24 s; no env vars touched, no catalog rebuild — Blob rows
+  persist). Production URL unchanged.
+- **Live verification (production URL, all PASS):**
+  - Manifest 200: name **"Binge Addon"**, id `com.bharatstreams`,
+    **version 1.0.6**, **27 catalogs**. Health 200 (`binge-addon`, 1.0.6).
+  - `GET /badges.json` 200, `application/json`, **5 groups, 23 filters**,
+    all 23 `imageURL`s non-empty and addon-hosted.
+  - **ALL 23 image URLs fetched live: 200, `image/png`, 7,290–19,349 B,
+    344,042 B total, 0 failures.**
+  - Deleted ids 404 live: hevc, ch-5-1, ch-7-1, x265, truehd, dts, aac,
+    opus, nonexistent. `/badges/%2e%2e%2fbadges.json` 404,
+    `/badges/.png` 404, `/badges/../lib/badges.json` 404,
+    `/badges/../../package.json` 400. NOTE: `/badges/../badges.json`
+    returns 200 — Vercel normalises the path to `/badges.json` BEFORE the
+    function runs, and that file is already public; no non-public file
+    leaks (local Express returned 404 for the same probe in v1.0.5 — the
+    difference is Vercel edge normalisation, not a code change).
+  - Rule test re-run against the LIVE `/badges.json`
+    (`BADGES_URL=… node tests/test-badges.js`): **ALL CHECKS PASS** on
+    live titles; badges seen: 1080p, 720p, BluRay, DD+, Dolby Atmos,
+    English, Hindi, REMUX, WEB-DL, WEBRip (max 4 per stream).
+  - Trending Indian movie **20/20** (Ramayana: Rise of a Legend first),
+    series **20/20** (Ali Baba Aur 40 Bhoot first).
+  - Meta Jailer 2 (`/meta/movie/tt33318732.json`) 200, full meta:
+    genres Action/Comedy/Drama, director Nelson, releaseInfo 2026,
+    runtime 165 min, cast 10, poster + description.
+  - `/admin` 200.
+- **Still open (parent):** the ONE thing unverifiable headlessly is how
+  the new minimal badges LOOK in Nuvio on-device — basant removes +
+  re-pastes the badges.json URL in Nuvio himself (Fusion ON) and sends a
+  stream-list screenshot. That on-device look is the final verdict;
+  nothing here claims the look until he confirms it.
