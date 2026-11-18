@@ -2,7 +2,10 @@
 // RULE (locked): CAM/TeleCine/TeleSync/HDTS/HDTC/DVDScr/SCR streams stay
 // HIDDEN whenever clean streams exist (v1.0.3 stands). They appear ONLY
 // as a last resort when a title has ZERO clean streams after filtering,
-// and every shown CAM stream is CLEARLY marked (Quality line + Note line).
+// and every shown CAM stream is CLEARLY marked in its Quality line
+// (CAM + kind). v1.1.3 (basant: "note likhne ke jarurat nahi hai bhai"):
+// the extra "Note: CAM print — theatre recording" line is GONE — the
+// Quality line's CAM marking is the whole warning now.
 //
 // Fixtures are REAL live Torrentio rows captured 18 Nov 2026 ~18:30 IST:
 //   tests/fixtures/ramayana-torrentio-20261118.json  (43 rows, ALL CAM)
@@ -58,11 +61,11 @@ eq(ramMerge.usedCam, true, 'merge falls back to CAM when clean is empty');
 eq(ramMerge.parsed.length, 36, 'merge returns all 36 CAM streams (under cap 40)');
 const ramOut = ramMerge.parsed.map(formatStream);
 check(ramOut.every((o) => /Quality: .*CAM/.test(o.description)), 'every CAM stream has CAM in its Quality line');
-check(ramOut.every((o) => /Note: CAM print/.test(o.description)), 'every CAM stream has the Note warning line');
+check(ramOut.every((o) => !/Note:/.test(o.description)), 'no Note line in any CAM stream description (v1.1.3: Note line removed)');
 check(ramOut.every((o) => !/CAM/.test(o.name)), 'CAM never leaks into the name');
 eq(ramOut[0].name, 'Ramayana (2026)', 'first CAM stream name');
 eq(ramOut[0].description,
-  'Quality: 1080p CAM TeleCine\nNote: CAM print — theatre recording\nSize: 6.38 GB',
+  'Quality: 1080p CAM TeleCine\nSize: 6.38 GB',
   'first CAM stream description (exact)');
 
 // ---------------------------------------------------------------------------

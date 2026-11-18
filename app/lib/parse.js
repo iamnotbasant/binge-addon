@@ -707,7 +707,6 @@ function formatStream(p) {
 
   const lines = [];
   if (qualityBits.length) lines.push(`Quality: ${qualityBits.join(' ')}`);
-  if (p.isCam) lines.push('Note: CAM print — theatre recording');
   if (audioPart) lines.push(`Audio: ${audioPart}`);
   if (p.size) lines.push(`Size: ${p.size.value} ${p.size.unit}`);
 
