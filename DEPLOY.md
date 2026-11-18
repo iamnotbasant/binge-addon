@@ -1251,3 +1251,68 @@ Date: 18 Nov 2026. Built by Muse subagents on this VM (no external person/compan
   lists (the addon serving the pack is verified; applying it in
   Nuvio is his one paste, NOT verified here). First auto cron run
   19 Nov 10:30 IST.
+
+## v1.0.5 BADGE IMAGES 18 Nov 2026 (basant: Nuvio showed "0 Fusion-style badges")
+
+- **The bug (verified):** Nuvio showed **"0 Fusion-style badges"** for our
+  `/badges.json` because every badge had `imageURL: ""` (text-only).
+  Schema diff vs the Xperience reference pack and FR-Badges is done:
+  `imageURL` is the ONLY gap — same top-level keys, same group/filter
+  fields, same `tagStyle`/`type` values. Patterns, groups and the badge
+  list are untouched in this release.
+- **What changed (one user-requested change → 1.0.5; dashboard redesign
+  is v1.0.6, not this):**
+  - **38 real PNGs**, rendered in-app into `app/lib/badge-images/<id>.png`
+    (5.0–21.1 KB each, 432,269 bytes total; dark `#1A1A1A` fill, salmon
+    `#FF858283` border, white text — same palette as the badges).
+  - **New route `GET /badges/:id.png`** in `app/index.js`, next to
+    `/badges.json`: serves the PNG with `Content-Type: image/png` and
+    `Cache-Control: public, max-age=86400`. SECURITY: allowlist built at
+    startup from the ids in `app/lib/badges.json` — only those 38 ids are
+    ever served; anything else is a 404. The id is validated against the
+    allowlist BEFORE any path is built, and the served path is fixed
+    (`lib/badge-images/<id>.png`) — raw user input is never joined into a
+    filesystem path, so no traversal is possible.
+  - **`app/lib/badges.json`:** every filter's `imageURL` is now
+    `https://binge-addon-httpbasant2-9067s-projects.vercel.app/badges/<id>.png`.
+    Verified by diff: patterns, groups, names and colors are byte-identical
+    except `imageURL` (38 replacements).
+  - Version 1.0.4 → **1.0.5** in `app/index.js`, `app/lib/manifest.js`,
+    `app/package.json`, `app/package-lock.json` (both version fields).
+    No dashboard/admin file touched.
+  - Test updated to v1.0.5 semantics: `tests/test-badges.js` now asserts
+    each `imageURL` equals the addon-hosted PNG URL (v1.0.4 asserted
+    `imageURL === ''` — that check failed 38× by design after the fix,
+    patterns untouched). All pattern/trap checks unchanged.
+- **Local test BEFORE deploy (all PASS):** `GET /badges.json` 200, 38
+  filters, all 38 `imageURL`s non-empty and addon-hosted; ALL 38
+  `GET /badges/<id>.png` 200, `image/png`, 5,000–21,097 B, valid PNG
+  magic, `Cache-Control: public, max-age=86400`; `/badges/nonexistent.png`
+  404, `/badges/../badges.json` 404, `/badges/%2e%2e%2fbadges.json` 404,
+  `/badges/.png` 404 (no file leak); `/manifest.json` 1.0.5, 27 catalogs;
+  `/health` 1.0.5. Rule test `node tests/test-badges.js`: ALL CHECKS PASS.
+- **Deploy v1.0.5:** `dpl_2Zy8uJ1dJJwrPkxmPuWbMFapH9RH` → READY (REST
+  token route, ~24 s; 54 files incl. all 38 PNGs; no env vars touched,
+  no catalog rebuild — Blob rows persist).
+- **Live verification (production URL, all PASS):**
+  - Manifest 200: name **"Binge Addon"**, id `com.bharatstreams`,
+    **version 1.0.5**, **27 catalogs**. Health 200 (`binge-addon`, 1.0.5).
+  - `GET /badges.json` 200, `application/json`, 7 groups, 38 filters,
+    all 38 `imageURL`s non-empty and addon-hosted.
+  - **ALL 38 image URLs fetched live: 200, `image/png`, sane sizes**
+    (5,000–21,097 B, 432,269 B total, 0 failures).
+  - Rule test re-run against the LIVE `/badges.json`
+    (`BADGES_URL=… node tests/test-badges.js`): **243 checks PASS, 0 FAIL**
+    on live titles.
+  - Trending Indian movie **20/20** (Ramayana: Rise of a Legend,
+    Jailer 2, Ranabaali), series **20/20** (Ali Baba Aur 40 Bhoot,
+    Akka, Student of the Year: After Dark).
+  - Meta Jailer 2 (`/meta/movie/tt33318732.json`) 200, full meta:
+    genres Action/Comedy/Drama, director Nelson, releaseInfo 2026,
+    runtime 165 min, cast 10, poster + description.
+  - `/admin` 200, page links `badges.json` next to `manifest.json`.
+- **Still open (parent):** the ONE thing unverifiable headlessly is
+  Nuvio's own preview count — basant re-pastes the badge link in Nuvio
+  himself (same URL, pack re-imported) and confirms on-device whether it
+  now shows 38 Fusion-style badges. That on-device preview is the final
+  verdict; nothing here claims it will show 38 until he confirms it.

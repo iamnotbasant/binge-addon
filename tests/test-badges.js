@@ -1,4 +1,7 @@
-// Binge Addon v1.0.4 — badge-pack rule test.
+// Binge Addon v1.0.5 — badge-pack rule test.
+// v1.0.5: every filter carries a real imageURL (addon-hosted PNG);
+// the assertion below checks that exact URL instead of the v1.0.4
+// text-only '' value. Patterns, groups and badge list unchanged.
 // Loads app/lib/badges.json (or the LIVE pack when BADGES_URL is set),
 // applies every pattern to REAL live stream titles+descriptions
 // (title + description combined, as Nuvio does), first match per group
@@ -50,8 +53,8 @@ async function getJSON(url) {
     ids.add(f.id);
     check(groupIds.has(f.groupId), `filter ${f.id} groupId ${f.groupId} exists`);
     check(typeof f.name === 'string' && f.name && typeof f.pattern === 'string' && f.pattern
-      && f.imageURL === '' && f.isEnabled === true
-      && f.tagStyle === 'filled and bordered', `filter ${f.id} fields ok (text-only, enabled)`);
+      && f.imageURL === `${BASE}/badges/${f.id}.png` && f.isEnabled === true
+      && f.tagStyle === 'filled and bordered', `filter ${f.id} fields ok (addon-hosted image, enabled)`);
     if (/4k|2160/i.test(f.name) || /4k|2160/i.test(f.pattern)) no4k = false;
   }
   check(no4k, 'no 4K / 2160p badge anywhere in the pack');

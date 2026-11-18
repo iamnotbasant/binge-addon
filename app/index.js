@@ -26,7 +26,7 @@ const { readConfig, writeConfig, effectiveCatalogs, normalizeConfig } = require(
 const STREAM_CAP = 40;
 const TMDB_IMG = 'https://image.tmdb.org/t/p';
 const ADDON_NAME = 'binge-addon';
-const VERSION = '1.0.4';
+const VERSION = '1.0.5';
 
 const builder = new addonBuilder(MANIFEST);
 
@@ -162,10 +162,32 @@ app.get('/manifest.json', async (req, res) => {
 });
 
 // --- Badge pack (v1.0.4): Nuvio/Fusion badges served as static JSON.
-// Text-only badges (no artwork hotlinked, nothing copied); Nuvio
-// snapshots the file on import, so later edits need a re-import.
+// v1.0.5: every filter now carries a real imageURL pointing at the
+// /badges/:id.png route below (PNGs rendered in-app, served by us).
+// Nuvio snapshots the file on import, so later edits need a re-import.
 app.get('/badges.json', (req, res) => {
   res.sendFile(path.join(__dirname, 'lib', 'badges.json'));
+});
+
+// --- Badge images (v1.0.5): GET /badges/:id.png serves the rendered PNG
+// for one badge. SECURITY: only ids listed in lib/badges.json are ever
+// served (allowlist built at startup); anything else is a 404. The id
+// is validated against the allowlist BEFORE any path is built, and the
+// served path is fixed (lib/badge-images/<id>.png) — raw user input is
+// never joined into a filesystem path, so no traversal is possible.
+let BADGE_IDS = new Set();
+try {
+  const pack = JSON.parse(fs.readFileSync(path.join(__dirname, 'lib', 'badges.json'), 'utf8'));
+  for (const f of pack.filters || []) if (f && typeof f.id === 'string') BADGE_IDS.add(f.id);
+} catch (e) {
+  console.log(`[binge-addon] badge allowlist failed to load: ${e.message}`);
+}
+app.get('/badges/:id.png', (req, res) => {
+  const id = req.params.id;
+  if (!BADGE_IDS.has(id)) return res.status(404).json({ ok: false, error: 'badge not found' });
+  res.type('image/png');
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.sendFile(path.join(__dirname, 'lib', 'badge-images', `${id}.png`));
 });
 
 // --- Admin dashboard (v2.1.0): same project, no new hosting.
