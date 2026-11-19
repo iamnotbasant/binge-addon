@@ -106,7 +106,9 @@ async function fetchSource(source, type, id, opts = {}) {
 // so far regardless of pending sources (§7.1).
 async function fetchAllStreams(type, id, opts = {}) {
   // v2.1.0: opts.disabled (Set of source names from the dashboard config)
-  // adds to DISABLE_SOURCES; opts.maxRes (720|1080) caps resolution.
+  // adds to DISABLE_SOURCES; opts.maxRes caps resolution (profile
+  // ceiling). v1.2.7: opts.profileCfg (resolved profile cfg) flows
+  // through to processSourceStreams for the profile sort.
   const disabled = new Set(disabledSources());
   for (const n of (opts.disabled || [])) disabled.add(n);
   const active = SOURCES.filter((s) => !disabled.has(s.name) && !isBlocked(s.name));
@@ -135,17 +137,25 @@ module.exports = { fetchAllStreams, mergeStreamResults, SOURCES, PER_SOURCE_TIME
 // clean streams from ALL sources first; the CAM pool is used ONLY when
 // the merged clean list is empty AFTER dedupe. Returns
 // { parsed: [parsed], usedCam: bool } — callers format + log the path.
-function mergeStreamResults(results, cap) {
+// v1.2.7: `cmps` carries the profile comparators ({ compare,
+// compareCam }); without it the desktop comparators are used, so
+// existing callers (and tests) are unchanged. The sort runs on the
+// FULL merged list BEFORE the cap slice — a Remux/CAM-heavy tail can
+// never eat the top slots (the 1.2.4-era invariant, kept for all
+// profiles).
+function mergeStreamResults(results, cap, cmps) {
+  const compare = (cmps && cmps.compare) || compareParsed;
+  const compareCamFn = (cmps && cmps.compareCam) || compareCam;
   const clean = [];
   const cam = [];
   for (const r of results || []) {
     if (r.streams) clean.push(...r.streams);
     if (r.cam) cam.push(...r.cam);
   }
-  clean.sort(compareParsed);
+  clean.sort(compare);
   const dedupedClean = dedupe(clean).slice(0, cap);
   if (dedupedClean.length) return { parsed: dedupedClean, usedCam: false };
-  cam.sort(compareCam);
+  cam.sort(compareCamFn);
   const dedupedCam = dedupe(cam).slice(0, cap);
   return { parsed: dedupedCam, usedCam: true };
 }

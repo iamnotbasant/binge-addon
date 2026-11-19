@@ -442,6 +442,18 @@
     cursor: pointer;
   }
   button.btn-icon svg { width: 16px; height: 16px; display: block; }
+  button.btn-copy {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  button.btn-copy:hover { background: var(--bg-card-hover); }
 
   /* --- Toast / Alert Banners (tint-free; color lives on <strong> only) --- */
   .toast-container {
@@ -867,7 +879,7 @@
   <div class="login-card">
     <div class="login-brand">
       <h1 class="brand-title">Binge Addon</h1>
-      <span class="login-badge">v1.2.4</span>
+      <span class="login-badge">v1.2.7</span>
     </div>
     <p class="login-desc">Admin Dashboard — Manage catalogs, row settings, stream providers, and run manual rebuilds.</p>
     <div class="login-form">
@@ -888,7 +900,7 @@
     <div class="sidebar-header">
       <div class="brand-row">
         <h1 class="brand-title">Binge Addon</h1>
-        <span class="version-tag">v1.2.4</span>
+        <span class="version-tag">v1.2.7</span>
       </div>
       <div class="connection-status">
         <span class="status-dot" id="statusDot"></span>
@@ -913,6 +925,14 @@
       <button class="nav-btn" data-view="streams">
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z" /></svg></span>
         <span>Stream sources</span>
+      </button>
+      <button class="nav-btn" data-view="profiles">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 5H3" /><path d="M12 19H3" /><path d="M14 3v4" /><path d="M16 17v4" /><path d="M21 12h-9" /><path d="M21 19h-5" /><path d="M21 5h-7" /><path d="M8 10v4" /><path d="M8 12H3" /></svg></span>
+        <span>Device profiles</span>
+      </button>
+      <button class="nav-btn" data-view="links">
+        <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg></span>
+        <span>Install links</span>
       </button>
       <button class="nav-btn" data-view="rebuild">
         <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg></span>
@@ -953,7 +973,7 @@
           <span class="status-note">Mumbai region (bom1)</span>
         </div>
         <div class="status-row">
-          <span class="status-text"><span class="dot dot-neutral"></span><span id="addonStatusText">Binge Addon · v1.2.4</span></span>
+          <span class="status-text"><span class="dot dot-neutral"></span><span id="addonStatusText">Binge Addon · v1.2.7</span></span>
           <span class="status-note mono">ID: com.bharatstreams</span>
         </div>
         <div class="status-row">
@@ -1061,7 +1081,7 @@
         <div class="card-header">
           <h3 class="card-title">Maximum video quality</h3>
         </div>
-        <p class="card-desc">1080p recommended hai. 4K and CAM rips are always blocked.</p>
+        <p class="card-desc">1080p recommended hai. CAM rips are always blocked; 4K sirf TV profile me allowed hai (Device Profiles dekho).</p>
 
         <div class="quality-select-wrap">
           <label class="visually-hidden" for="streamMaxQuality">Maximum video quality</label>
@@ -1073,7 +1093,66 @@
       </div>
     </div>
 
-    <!-- Panel 5: Rebuild (#view-rebuild) -->
+    <!-- Panel 5: Device Profiles (#view-profiles) -->
+    <div class="view-panel" id="view-profiles">
+      <div class="view-header">
+        <h2 class="view-title">Device profiles</h2>
+        <p class="view-subtitle">Ek addon, teeno device — har device ke liye apni quality sequence. Save karne ke baad ~1 minute me lag jayega, Nuvio refresh kar lo.</p>
+      </div>
+
+      <div class="toast info rows-note" data-entering>
+        <div>
+          <strong>Kaise kaam karta hai:</strong>
+          Nuvio addon ko batata hai kaunsi device hai — phone pe 720p upar, TV pe Remux/4K upar, laptop pe jo abhi hai wohi. Agar device pehchan me na aaye to laptop wala order lagta hai. Alag install chahiye to <b>Install links</b> me phone/TV wali link lo.
+        </div>
+      </div>
+
+      <div id="profileList"></div>
+    </div>
+
+    <!-- Panel 6: Install Links (#view-links) -->
+    <div class="view-panel" id="view-links">
+      <div class="view-header">
+        <h2 class="view-title">Install links</h2>
+        <p class="view-subtitle">Har profile ki apni install link — Nuvio me jis device pe jo chahiye woh link install karo.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Built-in links</h3>
+        </div>
+        <p class="card-desc">Main link device khud pehchan ke order badal deta hai. Phone/TV wali link us profile ko lock kar deti hai.</p>
+        <div id="builtinLinks"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Naya link banao</h3>
+        </div>
+        <p class="card-desc">Kisi profile ki copy banao — phir Device Profiles me uski sequence alag se badal sakte ho.</p>
+        <p class="card-desc"><strong>Link ka naam:</strong></p>
+        <input type="text" class="search-box" id="linkNameInput" placeholder="e.g. Weekend 4K" maxlength="60" autocomplete="off">
+        <p class="card-desc"><strong>Kis profile se copy karein:</strong></p>
+        <div class="quality-select-wrap">
+          <select id="linkBaseSelect">
+            <option value="desktop">Desktop / Laptop</option>
+            <option value="phone">Phone</option>
+            <option value="tv">TV</option>
+          </select>
+        </div>
+        <button class="btn-rebuild" id="createLinkBtn" type="button">Naya link banao</button>
+        <div id="linkResultBox" style="display: none;"></div>
+      </div>
+
+      <div class="card" id="customLinksCard" style="display: none;">
+        <div class="card-header">
+          <h3 class="card-title">Tumhare banaye hue links</h3>
+        </div>
+        <div id="customLinks"></div>
+      </div>
+    </div>
+
+    <!-- Panel 7: Rebuild (#view-rebuild) -->
     <div class="view-panel" id="view-rebuild">
       <div class="view-header">
         <h2 class="view-title">Rebuild Catalogs</h2>
@@ -1202,7 +1281,11 @@
   // --- Dirty State Tracking (§7.4.1) ---
   function isDirty() {
     if (!savedConfig || !draftConfig) return false;
-    return JSON.stringify(savedConfig) !== JSON.stringify(draftConfig);
+    if (JSON.stringify(savedConfig) !== JSON.stringify(draftConfig)) return true;
+    // v1.2.7: profile edits count too (guarded until profiles load).
+    if (savedProfiles && draftProfiles
+      && JSON.stringify(savedProfiles) !== JSON.stringify(draftProfiles)) return true;
+    return false;
   }
 
   function updateDirtyIndicator() {
@@ -1618,6 +1701,267 @@
     });
   }
 
+  // --- Device Profiles (v1.2.7) ---
+  let savedProfiles = null; // Deep clone of saved profiles
+  let draftProfiles = null; // In-memory working copy mutated by edits
+
+  const TIER_LABELS = { Remux: 'Remux', BluRay: 'BluRay', 'WEB-DL': 'WEB-DL', BDRip: 'BDRip', WEBRip: 'WEBRip', HDRip: 'HDRip', HDTV: 'HDTV', none: 'Bina tag (no source)' };
+  const RES_LABELS = { 2160: '2160p 4K', 1080: '1080p Full HD', 1080.1: '1080i', 720: '720p HD', 480: '480p' };
+  const CLASS_LABELS = { 0: 'Efficient (chhota size)', 1: 'Bada', 2: 'Bahut bada (Remux)', 3: 'Chhota shak wala (SAMPLE)' };
+  const PROFILE_META = {
+    desktop: { title: 'Desktop / Laptop', desc: 'Laptop jaisa abhi hai — Hindi 1080p pehle, size ke hisaab se.' },
+    phone: { title: 'Phone', desc: '720p screen — 720p pehle, 1080p fallback, 4K kabhi nahi.' },
+    tv: { title: 'TV', desc: 'Sirf best quality — size ki parwah nahi, 4K allowed.' },
+  };
+  const PROFILE_ORDER = ['desktop', 'phone', 'tv'];
+  const ALL_RESOLUTIONS = [2160, 1080, 1080.1, 720, 480];
+
+  // Enabled resolutions in stored order, then disabled ones appended.
+  function profileResRows(p) {
+    const enabled = Array.isArray(p.resolutionOrder) ? p.resolutionOrder : [];
+    const rows = enabled.map((r) => ({ res: r, enabled: true }));
+    for (const r of ALL_RESOLUTIONS) {
+      if (!enabled.includes(r)) rows.push({ res: r, enabled: false });
+    }
+    return rows;
+  }
+
+  function renderProfiles() {
+    const container = $('profileList');
+    if (!container) return;
+    if (!draftProfiles || !draftProfiles.profiles) {
+      container.innerHTML = '<div class="card"><p class="card-desc">Profiles load nahi hue — page refresh karke dobara try karo.</p></div>';
+      return;
+    }
+    container.innerHTML = PROFILE_ORDER.map((id) => {
+      const p = draftProfiles.profiles[id];
+      const meta = PROFILE_META[id];
+      const maxResOptions = id === 'tv'
+        ? '<option value="2160">2160p 4K (Best quality)</option><option value="1080">1080p Full HD (4K band)</option><option value="720">720p HD</option>'
+        : '<option value="1080">1080p Full HD</option><option value="720">720p HD (Data Saver)</option>';
+      const tiers = p.tierOrder.map((t, i) => `
+        <div class="stream-card-row">
+          <div class="stream-provider-info"><strong>${escapeHtml(TIER_LABELS[t] || t)}</strong></div>
+          <div>
+            <button class="btn-icon" data-prof="${id}" data-list="tier" data-idx="${i}" data-dir="-1" title="Move up" aria-label="Move tier up">${SVG_CHEVRON_UP}</button>
+            <button class="btn-icon" data-prof="${id}" data-list="tier" data-idx="${i}" data-dir="1" title="Move down" aria-label="Move tier down">${SVG_CHEVRON_DOWN}</button>
+          </div>
+        </div>`).join('');
+      const resRows = profileResRows(p).map((row, i) => `
+        <div class="stream-card-row">
+          <div class="stream-provider-info"><strong>${escapeHtml(RES_LABELS[row.res] || (row.res + 'p'))}</strong><span>${row.enabled ? 'On' : 'Off — is resolution ke streams nahi dikhenge'}</span></div>
+          <div>
+            <label class="toggle-switch">
+              <input type="checkbox" data-prof="${id}" data-res="${row.res}" ${row.enabled ? 'checked' : ''} aria-label="Enable resolution">
+              <span class="toggle-slider"></span>
+            </label>
+            <button class="btn-icon" data-prof="${id}" data-list="res" data-idx="${i}" data-dir="-1" title="Move up" aria-label="Move resolution up">${SVG_CHEVRON_UP}</button>
+            <button class="btn-icon" data-prof="${id}" data-list="res" data-idx="${i}" data-dir="1" title="Move down" aria-label="Move resolution down">${SVG_CHEVRON_DOWN}</button>
+          </div>
+        </div>`).join('');
+      const classes = p.sizeClassOrder === null
+        ? '<p class="card-desc">TV pe size class off hai — sirf quality matter karti hai, size nahi.</p>'
+        : p.sizeClassOrder.map((c, i) => `
+        <div class="stream-card-row">
+          <div class="stream-provider-info"><strong>${escapeHtml(CLASS_LABELS[c] || ('Class ' + c))}</strong></div>
+          <div>
+            <button class="btn-icon" data-prof="${id}" data-list="class" data-idx="${i}" data-dir="-1" title="Move up" aria-label="Move size class up">${SVG_CHEVRON_UP}</button>
+            <button class="btn-icon" data-prof="${id}" data-list="class" data-idx="${i}" data-dir="1" title="Move down" aria-label="Move size class down">${SVG_CHEVRON_DOWN}</button>
+          </div>
+        </div>`).join('');
+      return `
+      <div class="card">
+        <div class="card-header"><h3 class="card-title">${escapeHtml(meta.title)}</h3></div>
+        <p class="card-desc">${escapeHtml(meta.desc)}</p>
+        <p class="card-desc"><strong>Maximum quality:</strong></p>
+        <div class="quality-select-wrap">
+          <select data-prof-maxres="${id}">${maxResOptions}</select>
+        </div>
+        <p class="card-desc"><strong>Size order:</strong></p>
+        <div class="quality-select-wrap">
+          <select data-prof-sizedir="${id}">
+            <option value="asc">Chhota pehle (data bachega)</option>
+            <option value="desc">Bada pehle (best quality)</option>
+          </select>
+        </div>
+        <p class="card-desc"><strong>Quality sequence</strong> — upar wala pehle dikhega:</p>
+        ${tiers}
+        <p class="card-desc"><strong>Resolution order</strong> — upar wala pehle, off wala nahi dikhega:</p>
+        ${resRows}
+        <p class="card-desc"><strong>Size class order</strong> — upar wala pehle:</p>
+        ${classes}
+      </div>`;
+    }).join('');
+
+    // Set the select values after render (options were built unselected).
+    for (const id of PROFILE_ORDER) {
+      const p = draftProfiles.profiles[id];
+      const maxSel = container.querySelector(`[data-prof-maxres="${id}"]`);
+      if (maxSel) maxSel.value = String(p.maxRes);
+      const dirSel = container.querySelector(`[data-prof-sizedir="${id}"]`);
+      if (dirSel) dirSel.value = p.sizeDirection || 'asc';
+    }
+  }
+
+  // Swap helper for ordered lists; returns false when out of range.
+  function swapInList(list, idx, dir) {
+    const target = idx + dir;
+    if (target < 0 || target >= list.length) return false;
+    const tmp = list[idx];
+    list[idx] = list[target];
+    list[target] = tmp;
+    return true;
+  }
+
+  function handleProfileMove(btn) {
+    if (!draftProfiles) return;
+    const id = btn.dataset.prof;
+    const list = btn.dataset.list;
+    const idx = Number(btn.dataset.idx);
+    const dir = Number(btn.dataset.dir);
+    const p = draftProfiles.profiles[id];
+    if (!p) return;
+    let moved = false;
+    if (list === 'tier') moved = swapInList(p.tierOrder, idx, dir);
+    else if (list === 'class' && Array.isArray(p.sizeClassOrder)) moved = swapInList(p.sizeClassOrder, idx, dir);
+    else if (list === 'res') {
+      // Swap with the nearest ENABLED neighbour in that direction —
+      // disabled rows are not in the stored order, so swapping with
+      // one would be a no-op after re-render.
+      const rows = profileResRows(p);
+      let target = idx + dir;
+      while (target >= 0 && target < rows.length && !rows[target].enabled) target += dir;
+      if (target >= 0 && target < rows.length) {
+        const enabled = rows.filter((r) => r.enabled).map((r) => r.res);
+        const a = enabled.indexOf(rows[idx].res);
+        const b = enabled.indexOf(rows[target].res);
+        if (a !== -1 && b !== -1) { const tmp = enabled[a]; enabled[a] = enabled[b]; enabled[b] = tmp; moved = true; }
+        if (moved) p.resolutionOrder = enabled;
+      }
+    }
+    if (moved) { renderProfiles(); updateDirtyIndicator(); }
+  }
+
+  function setupProfileListeners() {
+    const container = $('profileList');
+    if (!container || container.dataset.listeners) return;
+    container.dataset.listeners = '1';
+    container.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-prof][data-list]');
+      if (btn) handleProfileMove(btn);
+    });
+    container.addEventListener('change', (e) => {
+      if (!draftProfiles) return;
+      const el = e.target;
+      // Selects carry data-prof-maxres / data-prof-sizedir; toggles carry data-prof.
+      const id = el.dataset.prof || el.dataset.profMaxres || el.dataset.profSizedir;
+      if (!id || !draftProfiles.profiles[id]) return;
+      const p = draftProfiles.profiles[id];
+      if (el.dataset.profMaxres) {
+        p.maxRes = Number(el.value);
+      } else if (el.dataset.profSizedir) {
+        p.sizeDirection = el.value;
+      } else if (el.dataset.res !== undefined && el.type === 'checkbox') {
+        const res = Number(el.dataset.res);
+        const rows = profileResRows(p);
+        const row = rows.find((r) => r.res === res);
+        if (row) row.enabled = el.checked;
+        p.resolutionOrder = rows.filter((r) => r.enabled).map((r) => r.res);
+        renderProfiles();
+      } else {
+        return;
+      }
+      updateDirtyIndicator();
+    });
+  }
+
+  // --- Install Links (v1.2.7) ---
+  async function copyText(text, btn) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (_) {}
+      ta.remove();
+    }
+    if (btn) {
+      const old = btn.textContent;
+      btn.textContent = 'Copied ✓';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    }
+  }
+
+  function linkRow(label, url) {
+    return `
+      <div class="stream-card-row">
+        <div class="stream-provider-info"><strong>${escapeHtml(label)}</strong><span class="mono">${escapeHtml(url)}</span></div>
+        <div><button class="btn-copy" data-copy="${escapeHtml(url)}" type="button">Copy</button></div>
+      </div>`;
+  }
+
+  function renderLinks() {
+    const origin = window.location.origin;
+    const builtin = $('builtinLinks');
+    if (builtin) {
+      builtin.innerHTML =
+        linkRow('Main — device khud pehchanega', `${origin}/manifest.json`) +
+        linkRow('Phone — 720p pehle', `${origin}/phone/manifest.json`) +
+        linkRow('TV — best quality / 4K', `${origin}/tv/manifest.json`);
+    }
+    const custom = (draftProfiles && draftProfiles.custom) || {};
+    const slugs = Object.keys(custom);
+    const card = $('customLinksCard');
+    const box = $('customLinks');
+    if (card && box) {
+      if (slugs.length === 0) {
+        card.style.display = 'none';
+        box.innerHTML = '';
+      } else {
+        card.style.display = '';
+        box.innerHTML = slugs.map((slug) =>
+          linkRow(custom[slug].name || slug, `${origin}/p/${slug}/manifest.json`)).join('');
+      }
+    }
+  }
+
+  async function createLink() {
+    const name = $('linkNameInput').value.trim();
+    const base = $('linkBaseSelect').value;
+    if (!name) {
+      showToast('Naam chahiye', 'Link banane ke liye pehle ek naam likho.', 'error');
+      return;
+    }
+    const btn = $('createLinkBtn');
+    btn.disabled = true;
+    try {
+      const res = await apiFetch('/admin/api/profiles/link', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ name, base }),
+      });
+      savedProfiles = JSON.parse(JSON.stringify(res.profiles));
+      draftProfiles = JSON.parse(JSON.stringify(savedProfiles));
+      renderProfiles();
+      renderLinks();
+      const box = $('linkResultBox');
+      box.style.display = '';
+      box.innerHTML = `
+        <p class="card-desc"><strong>Naya link ready hai:</strong></p>
+        ${linkRow(res.name, res.url)}
+        <p class="card-desc">Device Profiles me iski sequence alag se badal sakte ho — naam se pehchan lo.</p>`;
+      $('linkNameInput').value = '';
+      showToast('Link ban gaya', `${res.name} — Nuvio me install karo.`, 'success');
+    } catch (err) {
+      if (err.status === 401) showAuthModal();
+      else showToast(`Link nahi bana: ${err.message}`, 'Dobara try karo.', 'error', true);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   // --- Unified Save Flow (§7.1, §7.4.2, §7.4.3) ---
   async function saveSettings() {
     if (isSaving) return;
@@ -1634,6 +1978,22 @@
       // Synchronize in-memory saved snapshot
       savedConfig = JSON.parse(JSON.stringify(res.config));
       draftConfig = JSON.parse(JSON.stringify(savedConfig));
+
+      // v1.2.7: save profile edits in the same Save click (separate
+      // Blob file — config.json is never touched here).
+      if (savedProfiles && draftProfiles
+        && JSON.stringify(savedProfiles) !== JSON.stringify(draftProfiles)) {
+        const pres = await apiFetch('/admin/api/profiles', {
+          method: 'POST',
+          headers: headers(),
+          body: JSON.stringify(draftProfiles),
+        });
+        savedProfiles = JSON.parse(JSON.stringify(pres.profiles));
+        draftProfiles = JSON.parse(JSON.stringify(savedProfiles));
+        renderProfiles();
+        renderLinks();
+      }
+
       isSaving = false;
       updateDirtyIndicator();
 
@@ -1808,9 +2168,11 @@
 
   // --- Initial Data Load ---
   async function loadDashboard() {
-    // Fetch status in parallel; the shell renders as soon as config lands.
+    // Fetch status + profiles in parallel; the shell renders as soon as config lands.
     const statusPromise = apiFetch('/admin/api/status', { headers: headers() });
     statusPromise.catch(() => {});
+    const profilesPromise = apiFetch('/admin/api/profiles', { headers: headers() });
+    profilesPromise.catch(() => {});
     const configRes = await apiFetch('/admin/api/config', { headers: headers() });
     savedConfig = JSON.parse(JSON.stringify(configRes.config));
     draftConfig = JSON.parse(JSON.stringify(savedConfig));
@@ -1818,19 +2180,29 @@
     renderCatalogs();
     renderKnobs();
     renderStreams();
+    setupProfileListeners();
     updateDirtyIndicator();
 
     $('view-login').style.display = 'none';
     $('app').style.display = 'flex';
     document.body.classList.add('logged-in');
 
-    const [statusResult] = await Promise.allSettled([statusPromise]);
+    const [statusResult, profilesResult] = await Promise.allSettled([statusPromise, profilesPromise]);
     if (statusResult.status === 'fulfilled') {
       statusData = statusResult.value;
       renderOverview();
       renderCatalogs(); // Status carries per-row counts/previews; re-render once it lands.
     } else {
       console.warn('Status fetch error:', statusResult.reason);
+    }
+    if (profilesResult.status === 'fulfilled') {
+      savedProfiles = JSON.parse(JSON.stringify(profilesResult.value.profiles));
+      draftProfiles = JSON.parse(JSON.stringify(savedProfiles));
+      renderProfiles();
+      renderLinks();
+    } else {
+      console.warn('Profiles fetch error:', profilesResult.reason);
+      renderProfiles(); // Shows the "load nahi hua" note.
     }
   }
 
@@ -1859,6 +2231,8 @@
     pw = '';
     savedConfig = null;
     draftConfig = null;
+    savedProfiles = null;
+    draftProfiles = null;
     statusData = null;
     $('app').style.display = 'none';
     document.body.classList.remove('logged-in');
@@ -1886,6 +2260,12 @@
   // Bootstrap
   setupNavigation();
   setupStreamListeners();
+  $('createLinkBtn').addEventListener('click', createLink);
+  // Copy buttons are rendered dynamically (links panel + link result).
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-copy]');
+    if (btn) copyText(btn.dataset.copy, btn);
+  });
 
   if (pw) {
     loadDashboard().catch(() => {

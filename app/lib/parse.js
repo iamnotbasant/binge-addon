@@ -704,16 +704,29 @@ function processSourceStreams(sourceName, rawStreams, opts = {}) {
   const dropped = { noPlayable: 0, over1080: 0, cam: 0, langDrop: 0 };
   const parsed = [];
   let cam = [];
-  // v2.1.0 dashboard knob: maxRes 720 also drops 1080p; default 1080
-  // keeps the v1 hard cap (2160/1440 dropped, never 4K).
-  const maxRes = opts.maxRes === 720 ? 720 : 1080;
+  // v1.2.7: maxRes is the profile ceiling (desktop/phone 1080, TV
+  // 2160). A resolution above the ceiling is dropped — for 1080 that
+  // is exactly the old rule (2160 + 1440 dropped; 1080 dropped only
+  // when maxRes is 720). 1080i counts as 1080 for the cap (it was kept
+  // at maxRes 1080 before, and must stay kept). opts.profileCfg is the
+  // resolved profile cfg (defaults to desktop = v1.2.4 behaviour).
+  const maxRes = typeof opts.maxRes === 'number' ? opts.maxRes : 1080;
+  const profileCfg = (opts.profileCfg && typeof opts.profileCfg === 'object')
+    ? opts.profileCfg : DEFAULT_PROFILES.desktop;
 
   for (const s of rawStreams) {
     if (!s || (!s.infoHash && !s.url)) { dropped.noPlayable++; continue; }
     const p = parse(s);
     p.source = sourceName;
     p.raw = s;
-    if (p.resolution === 2160 || p.resolution === 1440 || (maxRes === 720 && (p.resolution === 1080 || p.resolution === 1080.1))) { dropped.over1080++; continue; }
+    const resForCap = p.resolution === 1080.1 ? 1080 : p.resolution;
+    if (resForCap !== null && resForCap !== undefined && resForCap > maxRes) { dropped.over1080++; continue; }
+    // v1.2.7: a resolution the profile disables (not in its
+    // resolutionOrder) is dropped — e.g. TV with 4K off, or a profile
+    // with 720p switched off. Unknown resolution (null) is never
+    // dropped here; it ranks last in the comparator.
+    if (p.resolution !== null && p.resolution !== undefined
+      && !profileCfg.resolutionOrder.includes(p.resolution)) { dropped.disabledRes = (dropped.disabledRes || 0) + 1; continue; }
     if (isCam(p.rawText)) {
       dropped.cam++;
       const verdict = languageVerdict(p.langs);
@@ -751,8 +764,8 @@ function processSourceStreams(sourceName, rawStreams, opts = {}) {
     dropped.camZeroSeeder = before - cam.length;
   }
 
-  kept.sort(compareParsed);
-  cam.sort(compareCam);
+  kept.sort((x, y) => compareWithProfile(x, y, profileCfg));
+  cam.sort((x, y) => compareCamWithProfile(x, y, profileCfg));
   return { kept, cam, dropped };
 }
 
@@ -821,25 +834,70 @@ function qualityTier(visual) {
   return best;
 }
 
-function compareParsed(a, b) {
-  const la = a.unknownLang ? 4 : languageRank(a.langs);
-  const lb = b.unknownLang ? 4 : languageRank(b.langs);
-  if (la !== lb) return la - lb;
-  const ra = resolutionRank(a.resolution);
-  const rb = resolutionRank(b.resolution);
-  if (ra !== rb) return ra - rb;
-  const ca = sizeClass(a);
-  const cb = sizeClass(b);
-  if (ca !== cb) return ca - cb;
-  const ta = qualityTier(a.visual);
-  const tb = qualityTier(b.visual);
-  if (ta !== tb) return ta - tb;
-  const sa = sizeBytes(a.size);
-  const sb = sizeBytes(b.size);
-  if (sa !== sb) return sa - sb; // smaller first, inside the same tier
-  const sea = a.seeders === null ? -1 : a.seeders;
-  const seb = b.seeders === null ? -1 : b.seeders;
-  if (sea !== seb) return seb - sea; // seeders: final tiebreak only
+// v1.2.7: data-driven comparator. A profile cfg (see
+// lib/profiles.js) drives the whole rank:
+//   keyOrder: which keys, in which order (desktop/phone:
+//   language > resolution > sizeClass > tier > size > seeders; TV:
+//   language > tier > resolution > size > seeders — no size class).
+//   resolutionOrder: resolutions best-first; a resolution NOT in the
+//   list ranks last (the filter drops it first when the profile
+//   disables it). sizeClassOrder: null = size classes off (TV).
+//   tierOrder: quality tiers best-first; 'none' = no source tag.
+//   sizeDirection: 'asc' (smaller first — data saving) or 'desc'
+//   (bigger first — TV, bigger = better quality).
+function tierRank(visual, tierOrder) {
+  let best = tierOrder.length; // unknown tag ranks after every listed tier
+  for (const t of visual) {
+    const i = tierOrder.indexOf(t);
+    if (i !== -1 && i < best) best = i;
+  }
+  if (best === tierOrder.length) {
+    const none = tierOrder.indexOf('none');
+    return none === -1 ? tierOrder.length : none;
+  }
+  return best;
+}
+
+function resolutionRankFor(res, resolutionOrder) {
+  if (res === null || res === undefined) return resolutionOrder.length;
+  const i = resolutionOrder.indexOf(res);
+  return i === -1 ? resolutionOrder.length : i;
+}
+
+function sizeClassRank(p, sizeClassOrder) {
+  if (!sizeClassOrder) return 0; // size classes off — all equal
+  const i = sizeClassOrder.indexOf(sizeClass(p));
+  return i === -1 ? sizeClassOrder.length : i;
+}
+
+function compareWithProfile(a, b, cfg) {
+  for (const key of cfg.keyOrder) {
+    if (key === 'language') {
+      const la = a.unknownLang ? 4 : languageRank(a.langs);
+      const lb = b.unknownLang ? 4 : languageRank(b.langs);
+      if (la !== lb) return la - lb;
+    } else if (key === 'resolution') {
+      const ra = resolutionRankFor(a.resolution, cfg.resolutionOrder);
+      const rb = resolutionRankFor(b.resolution, cfg.resolutionOrder);
+      if (ra !== rb) return ra - rb;
+    } else if (key === 'sizeClass') {
+      const ca = sizeClassRank(a, cfg.sizeClassOrder);
+      const cb = sizeClassRank(b, cfg.sizeClassOrder);
+      if (ca !== cb) return ca - cb;
+    } else if (key === 'tier') {
+      const ta = tierRank(a.visual, cfg.tierOrder);
+      const tb = tierRank(b.visual, cfg.tierOrder);
+      if (ta !== tb) return ta - tb;
+    } else if (key === 'size') {
+      const sa = sizeBytes(a.size);
+      const sb = sizeBytes(b.size);
+      if (sa !== sb) return cfg.sizeDirection === 'desc' ? sb - sa : sa - sb;
+    } else if (key === 'seeders') {
+      const sea = a.seeders === null ? -1 : a.seeders;
+      const seb = b.seeders === null ? -1 : b.seeders;
+      if (sea !== seb) return seb - sea; // seeders: final tiebreak only
+    }
+  }
   // Deterministic final tiebreak: the same set of streams must always
   // order the same way, regardless of source arrival order.
   const na = a.displayTitle || '';
@@ -848,6 +906,21 @@ function compareParsed(a, b) {
   const ka = (a.raw && (a.raw.infoHash || a.raw.url)) || '';
   const kb = (b.raw && (b.raw.infoHash || b.raw.url)) || '';
   return ka < kb ? -1 : ka > kb ? 1 : 0;
+}
+
+function compareCamWithProfile(a, b, cfg) {
+  if (a.camRank !== b.camRank) return a.camRank - b.camRank;
+  return compareWithProfile(a, b, cfg);
+}
+
+// The desktop default cfg reproduces v1.2.4 EXACTLY (same key order,
+// same resolution/tier/size-class orders, same size-asc + seeders
+// tiebreak) — compareParsed delegates to it, so desktop output is
+// byte-identical to v1.2.4 for the same inputs.
+const { DEFAULT_PROFILES } = require('./profiles');
+
+function compareParsed(a, b) {
+  return compareWithProfile(a, b, DEFAULT_PROFILES.desktop);
 }
 
 // Dedupe after sorting, keeping the best-ranked copy (§7.3).
@@ -972,7 +1045,8 @@ module.exports = {
   parseSeeders, parseReleaseGroup, parseDuration, parseReady,
   parseDebridProvider, durationSeconds,
   languageVerdict, languageRank, compareParsed, compareCam, sizeClass,
-  qualityTier,
+  qualityTier, compareWithProfile, compareCamWithProfile,
+  tierRank, resolutionRankFor, sizeClassRank,
   camKind, processSourceStreams, dedupe, formatStream, cleanTitle, extractDisplayName,
   extractBaseTitle,
 };

@@ -19,15 +19,17 @@ const path = require('path');
 const { addonBuilder, getRouter } = require('stremio-addon-sdk');
 const { MANIFEST } = require('./lib/manifest');
 const { fetchAllStreams, mergeStreamResults } = require('./lib/sources');
-const { formatStream } = require('./lib/parse');
+const { formatStream, compareWithProfile, compareCamWithProfile } = require('./lib/parse');
 const { readCatalog, readCatalogMeta, readIdMap } = require('./lib/store');
 const { resolveMeta } = require('./lib/meta-fetch');
 const { searchCatalogs } = require('./lib/search');
 const { readConfig, writeConfig, effectiveCatalogs, normalizeConfig } = require('./lib/config');
+const { runWithRequest, getProfile } = require('./lib/device');
+const { readProfiles, writeProfiles, resolveProfile, createCustomProfile } = require('./lib/profiles');
 
 const STREAM_CAP = 40;
 const ADDON_NAME = 'binge-addon';
-const VERSION = '1.2.4';
+const VERSION = '1.2.7';
 
 const builder = new addonBuilder(MANIFEST);
 
@@ -57,30 +59,49 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
 });
 
 // --- Stream handler (§7): tt… ids only, parallel fan-out, 7 s deadline.
-// Source on/off + max quality come from the dashboard config.
+// Source on/off come from the dashboard config; the resolution ceiling
+// and the sort order come from the request's device profile (v1.2.7).
 builder.defineStreamHandler(async ({ type, id }) => {
   if (!/^tt\d+(:\d+:\d+)?$/.test(id)) {
     console.log(`[binge-addon] stream ${type}/${id}: non-tt id, returning empty`);
     return { streams: [] };
   }
   const cfg = await readConfig();
+  const profiles = await readProfiles();
+  let profileId = getProfile();
+  let prof = resolveProfile(profiles, profileId);
+  if (!prof) {
+    // Unknown custom slug (profile deleted after install): fall back
+    // to desktop rather than failing the request.
+    console.log(`[binge-addon] stream ${type}/${id}: unknown profile ${profileId}, falling back to desktop`);
+    profileId = 'desktop';
+    prof = resolveProfile(profiles, 'desktop');
+  }
   const disabled = new Set();
   if (cfg.streams) {
     if (cfg.streams.torrentio === false) disabled.add('torrentio');
     if (cfg.streams.comet === false) disabled.add('comet');
     if (cfg.streams.hdhub === false) disabled.add('hdhub');
   }
-  const maxRes = cfg.streams && cfg.streams.maxQuality === '720p' ? 720 : 1080;
-  const results = await fetchAllStreams(type, id, { disabled, maxRes });
+  // v1.2.7: per-profile ceiling from profiles.json. The legacy
+  // dashboard maxQuality knob (720p) caps the DESKTOP profile only —
+  // phone/TV are governed by their own profile maxRes.
+  let maxRes = prof.maxRes;
+  if (profileId === 'desktop' && cfg.streams && cfg.streams.maxQuality === '720p') maxRes = 720;
+  const results = await fetchAllStreams(type, id, { disabled, maxRes, profileCfg: prof });
   // v1.1.2: CAM streams appear ONLY when zero clean streams survive
   // across ALL sources (mergeStreamResults enforces the rule).
-  const { parsed, usedCam } = mergeStreamResults(results, STREAM_CAP);
+  const { parsed, usedCam } = mergeStreamResults(results, STREAM_CAP, {
+    compare: (a, b) => compareWithProfile(a, b, prof),
+    compareCam: (a, b) => compareCamWithProfile(a, b, prof),
+  });
   // v1.2.1: the display format is the locked v1.1.3 Telegram shape
   // again (name line + Quality/Audio/Size) — formatStream takes no
   // options and reads no User-Agent, so the same text goes to every
-  // client (Windows, Android, none). The v1.1.8 UA middleware is gone.
+  // client (Windows, Android, none). The v1.1.8 UA middleware is gone;
+  // the v1.2.7 middleware only detects the device profile.
   const streams = parsed.map(formatStream);
-  console.log(`[binge-addon] stream ${type}/${id}: returning ${streams.length} ${usedCam ? 'CAM fallback' : 'clean'} streams`);
+  console.log(`[binge-addon] stream ${type}/${id} profile=${profileId}: returning ${streams.length} ${usedCam ? 'CAM fallback' : 'clean'} streams`);
   return { streams };
 });
 
@@ -140,13 +161,51 @@ builder.defineMetaHandler(async ({ type, id }) => {
 const app = express();
 app.use(express.json({ limit: '200kb' }));
 
+// --- Device profiles (v1.2.7): one smart addon. A /phone/..., /tv/...
+// or /p/<slug>/... prefix forces that profile for the whole request;
+// otherwise the client's User-Agent decides (unknown/missing UA ->
+// desktop). The prefix is stripped before routing so the SDK router
+// sees the plain paths; the forced profile rides in AsyncLocalStorage
+// (the v1.1.8 pattern — the SDK router never passes the raw request
+// to a handler). Stremio resolves addon URLs relative to the manifest
+// URL, so an install from /phone/manifest.json sends every later
+// request (streams, catalogs, meta) under /phone/ automatically.
+app.use((req, res, next) => {
+  let forced = null;
+  const url = req.url || '';
+  const m = url.match(/^\/(phone|tv)(?=\/|$)/);
+  const pm = url.match(/^\/p\/([a-z0-9][a-z0-9-]{0,40})(?=\/|$)/);
+  if (m) {
+    forced = m[1];
+    req.url = url.replace(/^\/(phone|tv)(?=\/|$)/, '') || '/';
+  } else if (pm) {
+    forced = `custom:${pm[1]}`;
+    req.url = url.replace(/^\/p\/[a-z0-9][a-z0-9-]{0,40}(?=\/|$)/, '') || '/';
+  }
+  runWithRequest(req, forced, () => next());
+});
+
 // --- Dynamic manifest (v2.1.0): the SDK router would serve the static
 // manifest; this route runs first and applies the dashboard config
 // (disabled catalogs hidden, renames, reorder). Stays < 8 KB.
+// v1.2.7: a forced profile renames the manifest so installs are
+// distinguishable in Nuvio ("Binge Addon — Phone" / "— TV" / custom
+// name). The manifest id stays com.bharatstreams on every profile —
+// the URL is what makes an install distinct. The main /manifest.json
+// keeps the plain name regardless of the detected device.
 app.get('/manifest.json', async (req, res) => {
   try {
     const cfg = await readConfig();
+    const profileId = getProfile();
     const manifest = { ...MANIFEST, catalogs: effectiveCatalogs(cfg) };
+    if (profileId === 'phone') manifest.name = 'Binge Addon — Phone';
+    else if (profileId === 'tv') manifest.name = 'Binge Addon — TV';
+    else if (typeof profileId === 'string' && profileId.startsWith('custom:')) {
+      const profiles = await readProfiles();
+      const prof = resolveProfile(profiles, profileId);
+      if (!prof) return res.status(404).json({ ok: false, error: 'unknown profile' });
+      manifest.name = prof.name || 'Binge Addon';
+    }
     res.json(manifest);
   } catch (e) {
     res.json(MANIFEST);
@@ -210,6 +269,48 @@ app.post('/admin/api/config', requireAdmin, async (req, res) => {
   try {
     const saved = await writeConfig(req.body || {});
     res.json({ ok: true, config: saved });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e.message) });
+  }
+});
+
+// --- Device profiles API (v1.2.7): the dashboard sequence editor and
+// link generator. profiles.json is a SEPARATE Blob file — config.json
+// is never touched here, so its shape cannot break. The server picks
+// up a saved profiles.json within its 60 s cache.
+app.get('/admin/api/profiles', requireAdmin, async (req, res) => {
+  const profiles = await readProfiles();
+  res.json({ ok: true, profiles });
+});
+
+app.post('/admin/api/profiles', requireAdmin, async (req, res) => {
+  try {
+    const saved = await writeProfiles(req.body || {});
+    res.json({ ok: true, profiles: saved });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e.message) });
+  }
+});
+
+// Link generator: create a custom profile (a copy of a built-in
+// profile's sequence, editable in the dashboard afterwards) and return
+// its install link. The URL is built from the request host (the
+// dashboard runs on the same origin).
+app.post('/admin/api/profiles/link', requireAdmin, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const profiles = await readProfiles();
+    const { slug, entry } = createCustomProfile(profiles, { name: body.name, base: body.base });
+    profiles.custom = profiles.custom || {};
+    profiles.custom[slug] = entry;
+    const saved = await writeProfiles(profiles);
+    const host = req.get('host') || 'binge-addon-httpbasant2-9067s-projects.vercel.app';
+    res.json({
+      ok: true, slug, name: entry.name, base: entry.base,
+      path: `/p/${slug}/manifest.json`,
+      url: `https://${host}/p/${slug}/manifest.json`,
+      profiles: saved,
+    });
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e.message) });
   }
