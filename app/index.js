@@ -21,12 +21,12 @@ const { MANIFEST } = require('./lib/manifest');
 const { fetchAllStreams, mergeStreamResults } = require('./lib/sources');
 const { formatStream } = require('./lib/parse');
 const { readCatalog, readCatalogMeta, readIdMap } = require('./lib/store');
+const { buildMetaFromTmdb } = require('./lib/meta');
 const { readConfig, writeConfig, effectiveCatalogs, normalizeConfig } = require('./lib/config');
 
 const STREAM_CAP = 40;
-const TMDB_IMG = 'https://image.tmdb.org/t/p';
 const ADDON_NAME = 'binge-addon';
-const VERSION = '1.1.5';
+const VERSION = '1.1.6';
 
 const builder = new addonBuilder(MANIFEST);
 
@@ -104,29 +104,19 @@ builder.defineMetaHandler(async ({ type, id }) => {
   }
   try {
     const base = type === 'movie' ? 'movie' : 'tv';
-    const url = `https://api.themoviedb.org/3/${base}/${tmdbId}?api_key=${key}&append_to_response=credits`;
+    // v1.1.6: `images` appended so the builder can set the detail-page
+    // logo from TMDB images.logos (English preferred, w500).
+    const url = `https://api.themoviedb.org/3/${base}/${tmdbId}?api_key=${key}&append_to_response=credits,images`;
     const res = await fetch(url);
     if (!res.ok) {
       console.log(`[binge-addon] meta ${type}/${id}: TMDB HTTP ${res.status}`);
       return { meta: null };
     }
     const d = await res.json();
-    const credits = d.credits || {};
-    const director = (credits.crew || []).find((c) => c.job === 'Director');
-    const meta = {
-      id,
-      type,
-      name: d.title || d.name,
-      poster: d.poster_path ? `${TMDB_IMG}/w342${d.poster_path}` : undefined,
-      background: d.backdrop_path ? `${TMDB_IMG}/w780${d.backdrop_path}` : undefined,
-      description: d.overview || undefined,
-      releaseInfo: (d.release_date || d.first_air_date || '').slice(0, 4),
-      genres: (d.genres || []).map((g) => g.name),
-      cast: (credits.cast || []).slice(0, 10).map((c) => c.name),
-      director: director ? director.name : undefined,
-    };
-    if (typeof d.runtime === 'number' && d.runtime > 0) meta.runtime = `${d.runtime} min`;
-    else if (Array.isArray(d.episode_run_time) && d.episode_run_time[0]) meta.runtime = `${d.episode_run_time[0]} min`;
+    // v1.1.6: meta built by lib/meta.js (logo + year added; cast stays
+    // bare name strings — the Stremio protocol has no cast-picture
+    // field, see lib/meta.js).
+    const meta = buildMetaFromTmdb(id, type, d);
     if (type === 'series' && Array.isArray(d.seasons)) {
       const videos = [];
       for (const s of d.seasons) {

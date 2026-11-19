@@ -230,6 +230,9 @@ function toMeta(item, type, imdbId) {
     poster: item.poster_path ? `${IMG_BASE}${item.poster_path}` : undefined,
     posterShape: 'poster',
     releaseInfo: (item.release_date || item.first_air_date || '').slice(0, 4),
+    // v1.1.6: same year field as the meta handler, so catalog rows carry
+    // it too (matches what Cinemeta sends in its catalog metas).
+    year: (item.release_date || item.first_air_date || '').slice(0, 4) || undefined,
     description: item.overview || undefined,
   };
 }
