@@ -6,9 +6,9 @@
 // The rank (see compareParsed in app/lib/parse.js): Hindi 1080p first
 // (unchanged), then size class — efficient (~1.5–5 GB sweet spot for a
 // feature film) < large (5–12 GB) < oversized (>12 GB) < suspiciously
-// tiny (<0.7 GB feature-length) — then quality tier (good encodes
-// BluRay/WEB-DL/WEBRip/HDRip/BDRip/Remux together, HDTV a step down,
-// no source tag last), then smaller size first inside the tier, then
+// tiny (<0.7 GB feature-length) — then quality tier FIRST inside the
+// class (v1.2.4: Remux > BluRay > WEB-DL > BDRip > WEBRip > HDRip >
+// HDTV > no tag), then smaller size first inside the tier, then
 // seeders as the final tiebreak. RE-RANK ONLY: size never drops a
 // stream — a Remux-only title still shows its Remux.
 //
@@ -60,7 +60,7 @@ eq(formatStream(dan.kept[3]).description.split('\n')[0], 'Quality: 1080p Remux',
   'Remux still present, ranked last (re-rank only, never dropped)');
 
 // ---------------------------------------------------------------------------
-// 2. Jailer 2 (real 145-row fixture): top stays the 1.57 GB HDRip
+// 2. Jailer 2 (real 145-row fixture): top is now a WEB-DL, not the HDRip
 // ---------------------------------------------------------------------------
 console.log('\n=== 2. Jailer 2 (real 145-row fixture) ===');
 const jaiRaw = load('jailer2-torrentio-20261118.json').streams;
@@ -69,8 +69,9 @@ const jaiMerge = mergeStreamResults([{ name: 'torrentio', streams: jai.kept, cam
 eq(jaiMerge.usedCam, false, 'no CAM fallback (clean streams exist)');
 eq(jaiMerge.parsed.length, 40, 'cap 40 kept');
 eq(formatStream(jaiMerge.parsed[0]).description,
-  'Quality: 1080p HDRip\nAudio: Hindi + English | DD+ 5.1\nSize: 1.57 GB',
-  'Jailer 2 top STAYS the 1.57 GB HDRip (smaller beats WEB-DL tier)');
+  'Quality: 1080p WEB-DL\nAudio: Hindi + English\nSize: 2.36 GB',
+  'Jailer 2 top is NOW the 2.36 GB WEB-DL (v1.2.4 tier-first: WEB-DL outranks HDRip, even though the 1.57 GB HDRip is smaller)');
+check(!/HDRip/.test(formatStream(jaiMerge.parsed[0]).description), 'no HDRip on top');
 check(jaiMerge.parsed.slice(0, 5).every((p) => sizeClass(p) === 0),
   'top 5 are all in the efficient band (<= 5 GB)');
 check(!jaiMerge.parsed.slice(0, 10).some((p) => (p.size ? p.size.value : 99) > 5 && p.size.unit === 'GB'),
@@ -82,11 +83,11 @@ check(!jaiMerge.parsed.slice(0, 10).some((p) => (p.size ? p.size.value : 99) > 5
 console.log('\n=== 3. 3 Idiots (real corpus, 4 rows) ===');
 const idiots = corpus.filter((f) => f.id.startsWith('3idiots-torrentio'));
 const idi = processSourceStreams('torrentio', idiots.map((f) => f.raw));
-eq(sizes(idi.kept).join(','), '2.49 GB,2.51 GB,4.17 GB,15.02 GB',
-  'order: 2.49 GB BDRip first (good tier, smaller wins), then BluRay pair, 15 GB last');
+eq(sizes(idi.kept).join(','), '2.51 GB,4.17 GB,2.49 GB,15.02 GB',
+  'order: BluRay pair first (tier 1), then the 2.49 GB BDRip (tier 3), 15 GB last');
 eq(formatStream(idi.kept[0]).description,
-  'Quality: 1080p\nAudio: Hindi + English | AAC\nSize: 2.49 GB',
-  '3 Idiots top is the 2.49 GB BDRip — same size band, sensible (was 2.51 GB BluRay)');
+  'Quality: 1080p BluRay\nAudio: Hindi | AAC\nSize: 2.51 GB',
+  '3 Idiots top is NOW the 2.51 GB BluRay (v1.2.4 tier-first: BluRay outranks BDRip)');
 
 // ---------------------------------------------------------------------------
 // 4. Remux-only title: the Remux still shows (never dropped for size)
@@ -124,9 +125,10 @@ const ep = processSourceStreams('torrentio', [
   synth('Show.S01E01.1080p.WEB-DL.x264.mkv', 10, '0.6 GB', '41m:22s'),
   synth('Show.S01E01.1080p.BluRay.x264.mkv', 10, '4 GB'),
 ]);
-eq(formatStream(ep.kept[0]).description.split('\n')[2], 'Size: 0.6 GB',
-  '600 MB / 41-min episode tops (normalised to ~2.2 GB feature-equivalent)');
-eq(sizeClass(ep.kept[0]), 0, 'episode row is class 0 (efficient) with duration');
+eq(formatStream(ep.kept[0]).description.split('\n')[2], 'Size: 4 GB',
+  'BluRay 4 GB tops the 600 MB WEB-DL episode (v1.2.4 tier-first: BluRay outranks WEB-DL in the same class)');
+const epRow = ep.kept.find((p) => p.size && p.size.value === 0.6);
+eq(sizeClass(epRow), 0, 'episode row is class 0 (efficient) with duration');
 const epNoDur = processSourceStreams('torrentio', [
   synth('Show.S01E01.1080p.WEB-DL.x264.mkv', 10, '0.6 GB'),
   synth('Show.S01E01.1080p.BluRay.x264.mkv', 10, '4 GB'),
@@ -157,11 +159,14 @@ const tie = processSourceStreams('torrentio', [
 ]);
 check(tie.kept[0].seeders === 40, 'same tier + same size: more seeders first');
 eq(sizeClass({ size: null }), 1, 'unknown size ranks as large (class 1)');
-eq(qualityTier(['WEB-DL']), 0, 'WEB-DL is a good-encode tier');
-eq(qualityTier(['BDRip']), 0, 'BDRip is a good-encode tier');
-eq(qualityTier(['Remux']), 0, 'Remux is a good-encode tier');
-eq(qualityTier(['HDTV']), 1, 'HDTV is a step down');
-eq(qualityTier([]), 2, 'no source tag ranks last');
+eq(qualityTier(['Remux']), 0, 'Remux is the top tier');
+eq(qualityTier(['BluRay']), 1, 'BluRay is tier 1');
+eq(qualityTier(['WEB-DL']), 2, 'WEB-DL is tier 2');
+eq(qualityTier(['BDRip']), 3, 'BDRip is tier 3');
+eq(qualityTier(['WEBRip']), 4, 'WEBRip is tier 4 (below WEB-DL)');
+eq(qualityTier(['HDRip']), 5, 'HDRip is tier 5');
+eq(qualityTier(['HDTV']), 6, 'HDTV is tier 6');
+eq(qualityTier([]), 7, 'no source tag ranks last');
 
 // Determinism: reversed input order must give the identical ranking.
 const rev = processSourceStreams('torrentio', [...jaiRaw].reverse());
@@ -183,6 +188,45 @@ eq(formatStream(ram.cam[0]).description,
   'first CAM stream unchanged (Quality-line mark, no Note line)');
 check(ram.cam.every((p, i) => i === 0 || ram.cam[i - 1].camRank <= p.camRank),
   'cam list still sorted best-first by camRank');
+
+// ---------------------------------------------------------------------------
+// 9. Pushpa 2 tier-first (v1.2.4): WEB-DL outranks WEBRip even when smaller
+// ---------------------------------------------------------------------------
+console.log('\n=== 9. Pushpa 2 tier-first (v1.2.4) ===');
+const pushpa = processSourceStreams('torrentio', [
+  synth('Pushpa.2.2024.1080p.WEBRip.x265.AAC.mkv', 2, '2 GB'),
+  synth('Pushpa.2.2024.1080p.WEB-DL.x264.mkv', 10, '2.4 GB'),
+  synth('Pushpa.2.2024.1080p.WEBRip.x264.DD.2.0.mkv', 8, '2.57 GB'),
+]);
+eq(formatStream(pushpa.kept[0]).description,
+  'Quality: 1080p WEB-DL\nAudio: Hindi\nSize: 2.4 GB',
+  'WEB-DL 2.4 GB tops the smaller WEBRip 2 GB (tier first, size second)');
+eq(formatStream(pushpa.kept[1]).description.split('\n')[2], 'Size: 2 GB',
+  'the 2 GB WEBRip is now #2, not dropped');
+const bluVsWeb = processSourceStreams('torrentio', [
+  synth('Movie.2026.1080p.WEB-DL.x264.mkv', 10, '2.4 GB'),
+  synth('Movie.2026.1080p.BluRay.x264.mkv', 5, '2.01 GB'),
+]);
+eq(formatStream(bluVsWeb.kept[0]).description.split('\n')[2], 'Size: 2.01 GB',
+  'BluRay 2.01 GB still tops WEB-DL 2.4 GB (BluRay tier is above WEB-DL)');
+const largeWeb = processSourceStreams('torrentio', [
+  synth('Movie.2026.1080p.WEB-DL.x264.mkv', 10, '5.3 GB'),
+  synth('Movie.2026.1080p.BluRay.x264.mkv', 5, '2.01 GB'),
+]);
+eq(formatStream(largeWeb.kept[0]).description.split('\n')[2], 'Size: 2.01 GB',
+  'large-class WEB-DL 5.3 GB does NOT jump the efficient BluRay 2.01 GB (size class still dominates)');
+const webVsHd = processSourceStreams('torrentio', [
+  synth('Movie.2026.1080p.HDRip.x264.AAC.mkv', 20, '1.57 GB'),
+  synth('Movie.2026.1080p.WEB-DL.x264.mkv', 3, '2.99 GB'),
+]);
+eq(formatStream(webVsHd.kept[0]).description.split('\n')[2], 'Size: 2.99 GB',
+  'WEB-DL 2.99 GB tops the smaller HDRip 1.57 GB (Jailer 2 behaviour)');
+const webRipOnly = processSourceStreams('torrentio', [
+  synth('Movie.2026.1080p.WEBRip.x264.mkv', 4, '2 GB'),
+]);
+eq(webRipOnly.kept.length, 1, 'WEBRip-only title keeps its stream (no dropping)');
+eq(formatStream(webRipOnly.kept[0]).description.split('\n')[0], 'Quality: 1080p WEBRip',
+  'the only stream is the WEBRip');
 
 console.log(`\nRESULT: ${fail === 0 ? 'ALL CHECKS PASS' : fail + ' CHECK(S) FAILED'}`);
 process.exit(fail === 0 ? 0 : 1);

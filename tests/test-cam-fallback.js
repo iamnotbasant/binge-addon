@@ -90,8 +90,8 @@ check(!jaiOut.some((o) => /CAM/.test(`${o.name}\n${o.description}`)),
 check(!jaiOut.some((o) => /Note: CAM print/.test(o.description)), 'no CAM Note line in clean output');
 eq(jaiOut[0].name, 'Jailer 2 (2026)', 'first clean stream name (title + year)');
 eq(jaiOut[0].description,
-  'Quality: 1080p HDRip\nAudio: Hindi + English | DD+ 5.1\nSize: 1.57 GB',
-  'first clean stream description (locked Telegram format v1.1.3, restored v1.2.1)');
+  'Quality: 1080p WEB-DL\nAudio: Hindi + English\nSize: 2.36 GB',
+  'first clean stream description (locked Telegram format v1.1.3, restored v1.2.1 — v1.2.4 tier-first: WEB-DL now tops, format itself unchanged)');
 
 // ---------------------------------------------------------------------------
 // 4. Clean-only title: Dangal corpus rows — unchanged behaviour

@@ -688,7 +688,9 @@ function resolutionRank(res) {
 // (v1.2.3: the old ENCODE_RANK pure-quality order — BluRay > WEB-DL >
 // WEBRip > HDTV, biggest size first — is gone from compareParsed. The
 // size-aware rank above replaces it: an oversized Remux must fall below
-// an efficient encode, and inside the efficient band smaller wins.)
+// an efficient encode. v1.2.4: inside a size class the tier orders
+// first (Remux > BluRay > WEB-DL > BDRip > WEBRip > HDRip > HDTV),
+// and smaller size wins only inside the same tier.)
 
 // Full pipeline for one source's raw streams: parse -> filter -> sort.
 // Returns { kept: [parsed], cam: [parsed], dropped: { reason: count } }.
@@ -765,6 +767,8 @@ function compareCam(a, b) {
 // quality, BEST BY SIZE — his Jio data is 3 GB/day, and a 32 GB Remux on
 // top would eat 10 days for one movie). RE-RANK ONLY: size never drops a
 // stream — a title with only a Remux still shows its Remux.
+// v1.2.4: inside a size class, quality tier orders FIRST (see
+// qualityTier below) — WEB-DL outranks WEBRip even when smaller.
 // ---------------------------------------------------------------------------
 
 // Sweet-spot band for a ~2.5 h feature film: WEB-DL / BDRip / encoded
@@ -796,16 +800,25 @@ function sizeClass(p) {
   return 2;
 }
 
-// Quality tier INSIDE a size class: the good-encode group (BluRay /
-// WEB-DL / WEBRip / HDRip / BDRip / Remux) ranks together — within it,
-// smaller size wins, so a 1.57 GB HDRip stays above a 2.99 GB WEB-DL.
-// HDTV is a step down; a row with no source tag at all ranks last (its
-// quality is unverifiable).
-const GOOD_SOURCES = new Set(['BluRay', 'WEB-DL', 'WEBRip', 'HDRip', 'BDRip', 'Remux']);
+// Quality tier INSIDE a size class (v1.2.4, basant: WEB-DL must rank
+// above WEBRip — his Pushpa 2 list topped with a 2 GB WEBRip while a
+// 2.4 GB WEB-DL sat below it, because v1.2.3 sorted by size first
+// inside the band). Tier first, then smaller size inside the tier:
+// Remux > BluRay > WEB-DL > BDRip > WEBRip > HDRip > HDTV > no tag.
+// Size class still dominates (a large-class WEB-DL never jumps an
+// efficient BluRay), and Remux stays safe: a 32 GB Remux is class 2
+// (oversized) so it still falls below efficient encodes — tier only
+// orders rows that are already in the same size class.
+const SOURCE_TIER = {
+  Remux: 0, BluRay: 1, 'WEB-DL': 2, BDRip: 3, WEBRip: 4, HDRip: 5, HDTV: 6,
+};
 function qualityTier(visual) {
-  if (visual.some((t) => GOOD_SOURCES.has(t))) return 0;
-  if (visual.includes('HDTV')) return 1;
-  return 2;
+  let best = 7; // no source tag: quality is unverifiable, ranks last
+  for (const t of visual) {
+    const r = SOURCE_TIER[t];
+    if (r !== undefined && r < best) best = r;
+  }
+  return best;
 }
 
 function compareParsed(a, b) {
