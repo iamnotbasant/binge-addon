@@ -121,7 +121,7 @@ const AUDIO_TAGS = ['Atmos', 'TrueHD', 'DTS-HD MA', 'DTS', 'DD+', 'DD', 'AAC', '
 // 'Remux' has NO TAG_RE entry on purpose: findTags falls back to a plain
 // case-insensitive substring test for it, and "BDRemux" (no word boundary
 // before "Remux") must still match — "remux" only ever means a remux.
-const VISUAL_TAGS = ['HDR10+', 'HDR10', 'Dolby Vision', 'DV', 'HDR', 'BluRay', 'WEB-DL', 'WEBRip', 'HDRip', 'HDTV', 'Remux'];
+const VISUAL_TAGS = ['HDR10+', 'HDR10', 'Dolby Vision', 'DV', 'HDR', 'BluRay', 'WEB-DL', 'WEBRip', 'HDRip', 'HDTV', 'Remux', 'BDRip'];
 const ENCODE_TAGS = ['HEVC', 'x265', 'h265', 'AVC', 'x264', 'h264', '10bit'];
 
 function findTags(text, tags) {
@@ -188,6 +188,7 @@ const TAG_RE = {
   '10bit': /(?<![A-Za-z])10-?bit(?![A-Za-z])/i,
   HDRip: /(?<![A-Za-z])hdrip(?![A-Za-z])/i,
   HDTV: /(?<![A-Za-z])hdtv(?![A-Za-z])/i,
+  BDRip: /(?<![A-Za-z])bdrip(?![A-Za-z])/i,
   // EAC3 checked before AC3 by the lookbehind: in "EAC3" the "AC3" is
   // preceded by "E" (a letter), so the AC3 pattern cannot fire inside it.
   AC3: /(?<![A-Za-z])ac3(?![A-Za-z])/i,
@@ -684,13 +685,10 @@ function resolutionRank(res) {
   return RES_RANK[res] !== undefined ? RES_RANK[res] : 4;
 }
 
-const ENCODE_RANK = { BluRay: 0, 'WEB-DL': 1, WEBRip: 2, HDTV: 3 };
-function encodeRank(visual) {
-  for (const tag of visual) {
-    if (ENCODE_RANK[tag] !== undefined) return ENCODE_RANK[tag];
-  }
-  return 4;
-}
+// (v1.2.3: the old ENCODE_RANK pure-quality order — BluRay > WEB-DL >
+// WEBRip > HDTV, biggest size first — is gone from compareParsed. The
+// size-aware rank above replaces it: an oversized Remux must fall below
+// an efficient encode, and inside the efficient band smaller wins.)
 
 // Full pipeline for one source's raw streams: parse -> filter -> sort.
 // Returns { kept: [parsed], cam: [parsed], dropped: { reason: count } }.
@@ -762,6 +760,54 @@ function compareCam(a, b) {
   return compareParsed(a, b);
 }
 
+// ---------------------------------------------------------------------------
+// Size-aware ranking (v1.2.3, basant: top stream must be 1080p, good
+// quality, BEST BY SIZE — his Jio data is 3 GB/day, and a 32 GB Remux on
+// top would eat 10 days for one movie). RE-RANK ONLY: size never drops a
+// stream — a title with only a Remux still shows its Remux.
+// ---------------------------------------------------------------------------
+
+// Sweet-spot band for a ~2.5 h feature film: WEB-DL / BDRip / encoded
+// BluRay / HDRip in this band are the top rank. Above 12 GB is
+// oversized (Remux territory); below 0.7 GB for a feature is
+// suspiciously tiny (likely a fake / mislabelled / butchered encode) and
+// must never outrank a normal encode — size wins only inside the sane
+// band. Unknown size (no 💾 token) ranks as large: it cannot prove it
+// is efficient, but it is not punished as oversized or tiny.
+const EFFICIENT_MAX_GB = 5;
+const LARGE_MAX_GB = 12;
+const TINY_MIN_GB = 0.7;
+const FEATURE_MINUTES = 150; // runtime normalisation baseline
+
+// Size class: 0 efficient < 1 large < 2 oversized < 3 suspiciously tiny.
+// When a per-file duration is known (Comet rows carry one), the size is
+// normalised to a 150-minute feature first, so a 45-min episode at
+// 600 MB is efficient, not tiny. Without a duration the absolute size
+// is used.
+function sizeClass(p) {
+  const bytes = sizeBytes(p.size);
+  if (!p.size || bytes <= 0) return 1;
+  let gb = bytes / 1e9;
+  const dur = durationSeconds(p.duration);
+  if (dur && dur > 0) gb = (gb * FEATURE_MINUTES * 60) / dur;
+  if (gb < TINY_MIN_GB) return 3;
+  if (gb <= EFFICIENT_MAX_GB) return 0;
+  if (gb <= LARGE_MAX_GB) return 1;
+  return 2;
+}
+
+// Quality tier INSIDE a size class: the good-encode group (BluRay /
+// WEB-DL / WEBRip / HDRip / BDRip / Remux) ranks together — within it,
+// smaller size wins, so a 1.57 GB HDRip stays above a 2.99 GB WEB-DL.
+// HDTV is a step down; a row with no source tag at all ranks last (its
+// quality is unverifiable).
+const GOOD_SOURCES = new Set(['BluRay', 'WEB-DL', 'WEBRip', 'HDRip', 'BDRip', 'Remux']);
+function qualityTier(visual) {
+  if (visual.some((t) => GOOD_SOURCES.has(t))) return 0;
+  if (visual.includes('HDTV')) return 1;
+  return 2;
+}
+
 function compareParsed(a, b) {
   const la = a.unknownLang ? 4 : languageRank(a.langs);
   const lb = b.unknownLang ? 4 : languageRank(b.langs);
@@ -769,13 +815,26 @@ function compareParsed(a, b) {
   const ra = resolutionRank(a.resolution);
   const rb = resolutionRank(b.resolution);
   if (ra !== rb) return ra - rb;
-  const sa = a.seeders === null ? -1 : a.seeders;
-  const sb = b.seeders === null ? -1 : b.seeders;
-  if (sa !== sb) return sb - sa;
-  const ea = encodeRank(a.visual);
-  const eb = encodeRank(b.visual);
-  if (ea !== eb) return ea - eb;
-  return sizeBytes(b.size) - sizeBytes(a.size);
+  const ca = sizeClass(a);
+  const cb = sizeClass(b);
+  if (ca !== cb) return ca - cb;
+  const ta = qualityTier(a.visual);
+  const tb = qualityTier(b.visual);
+  if (ta !== tb) return ta - tb;
+  const sa = sizeBytes(a.size);
+  const sb = sizeBytes(b.size);
+  if (sa !== sb) return sa - sb; // smaller first, inside the same tier
+  const sea = a.seeders === null ? -1 : a.seeders;
+  const seb = b.seeders === null ? -1 : b.seeders;
+  if (sea !== seb) return seb - sea; // seeders: final tiebreak only
+  // Deterministic final tiebreak: the same set of streams must always
+  // order the same way, regardless of source arrival order.
+  const na = a.displayTitle || '';
+  const nb = b.displayTitle || '';
+  if (na !== nb) return na < nb ? -1 : 1;
+  const ka = (a.raw && (a.raw.infoHash || a.raw.url)) || '';
+  const kb = (b.raw && (b.raw.infoHash || b.raw.url)) || '';
+  return ka < kb ? -1 : ka > kb ? 1 : 0;
 }
 
 // Dedupe after sorting, keeping the best-ranked copy (§7.3).
@@ -899,7 +958,8 @@ module.exports = {
   parseLanguages, parseAudioLanguages, parseChannels, parseResolution,
   parseSeeders, parseReleaseGroup, parseDuration, parseReady,
   parseDebridProvider, durationSeconds,
-  languageVerdict, languageRank, compareParsed, compareCam,
+  languageVerdict, languageRank, compareParsed, compareCam, sizeClass,
+  qualityTier,
   camKind, processSourceStreams, dedupe, formatStream, cleanTitle, extractDisplayName,
   extractBaseTitle,
 };
