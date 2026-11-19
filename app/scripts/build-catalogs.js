@@ -122,6 +122,10 @@ const NEW_REL_MIN_VOTES_SERIES = 25; // v1.3.1 worldwide-SERIES vote_count
 // floor left only 8 series worldwide (second v1.3.1 rebuild). Movies
 // stay at 100 (their row fills 20/20 there). vote_average stays 6.5.
 const NEW_REL_INDIAN_TARGET = 10;   // v1.3.1 reserved Indian slots per row
+const REL_NEXT_INDIAN_TARGET = 10;  // v1.3.3 reserved Indian slots in the
+// Releasing Next 30 Days movie row (same 10/10 split as v1.3.1).
+const REL_NEXT_PREMIERE_TARGET = 10; // v1.3.3 reserved new-premiere slots
+// in the Releasing Next 30 Days series row; returning seasons fill the rest.
 
 // v1.3.1: legacy per-row Blob files for REMOVED catalogs. The bundle no
 // longer carries them, but readCatalogFile falls back to the frozen
@@ -926,25 +930,194 @@ async function buildRows(type, key, idMap, stats, ctx) {
     }, ROW_CAP, ANIME_REFILL_PAGES, type, key, idMap, seriesCache, stats);
   }
 
-  // --- #6 Releasing Next 30 Days (both): release_date / first_air_date
-  // within the next 30 days, sort by popularity (hype proxy — no Trakt
-  // watchlists in TMDB). date-asc was considered and NOT used: it would
-  // put the nearest-dated obscure titles first; popularity inside the
-  // window puts the biggest upcoming titles on top (same reasoning as
-  // the v1.2 New Releases sort change).
+  // --- #6 Releasing Next 30 Days (both) — v1.3.3: two fixes, one per type.
+  // The old shape was a single discover pass (release/first_air_date in
+  // [today, +30d], popularity.desc). It had two holes, both reported by
+  // basant 19 Nov 2026: (1) series — returning seasons can NEVER match
+  // first_air_date (Dhindora S2 premieres 20 Nov 2026, first aired 14 Oct
+  // 2021, so it was absent from the live row); (2) movies — the global
+  // popularity sort crowded Indian big drops out (live 19 Nov 2026: 2/20
+  // Indian — O.M + Yeh Prem Mol Liya; Pratap, Suryaa, Eetha, Maatrubhumi,
+  // Bokshi missing). TMDB checks before building: Pratap exists with
+  // 2026-11-20, Eetha + Bokshi exist as 2026 titles dated 2026-12-04
+  // (sort-crowded, fixable); Kaali Kheti, Gunmaaster G9 and the 2026
+  // Chamunda have NO TMDB entry at all (data gap — no fix can surface
+  // them, and no date is invented); Suryaa exists (movie/1522938) but
+  // shows no release date on TMDB and Maatrubhumi's TMDB date reads
+  // 2026-11-04 against the web-reported 4 Dec — both are settled by the
+  // live rebuild, not by guessing. King (24 Dec) is OUTSIDE the window
+  // and is never forced in.
   const nextFrom = todayStr;
   const nextTo = isoDate(daysFromNow(nextDays));
-  const nextBase = { sort_by: 'popularity.desc' };
   if (isMovie) {
-    nextBase['primary_release_date.gte'] = nextFrom;
-    nextBase['primary_release_date.lte'] = nextTo;
+    // v1.3.3 movie: same 10/10 split as v1.3.1 new-releases — Indian pass
+    // (with_origin_country IN, target 10) then worldwide pass (skips
+    // Indian-origin titles), merged by release date desc. No vote floors:
+    // upcoming titles have few/no TMDB votes, a floor would empty the
+    // pool. The two passes select DIFFERENTLY, learned live across two
+    // builds: the first build sorted both passes by primary_release_date
+    // .desc and the nearest big drops vanished (O.M + Yeh Prem Mol Liya,
+    // 20/27 Nov — they were in the old popularity-sorted row). The
+    // second build sorted both by popularity.desc and O.M / Yeh Prem /
+    // Bokshi / Kaali Kheti came back — but Pratap + Eetha were STILL out
+    // even though live search proves both have IMDb ids on TMDB: TMDB
+    // popularity is an unreliable proxy for Indian hype (obscure titles
+    // outrank real upcoming films), so the Indian pass now selects by
+    // IMMINENCE — primary_release_date.asc, the 10 nearest Indian
+    // releases (the 20 Nov cluster first). The worldwide pass keeps
+    // popularity.desc (global TMDB popularity IS a good proxy for big
+    // worldwide titles — Avengers: Doomsday, Dune 3 stay). The merge
+    // re-sorts by date desc (per the brief).
+    const nextIndian = [];
+    const nextGlobal = [];
+    const nextSeen = new Set();
+    for (let p = 1; p <= 3 && nextIndian.length < REL_NEXT_INDIAN_TARGET; p++) {
+      const page = await tmdb('/discover/movie', key, {
+        sort_by: 'primary_release_date.asc',
+        with_origin_country: 'IN',
+        'primary_release_date.gte': nextFrom,
+        'primary_release_date.lte': nextTo,
+        page: p,
+      });
+      for (const item of page.results || []) {
+        if (nextIndian.length >= REL_NEXT_INDIAN_TARGET) break;
+        if (nextSeen.has(item.id)) continue;
+        nextSeen.add(item.id);
+        const imdbId = await resolveImdb(type, item.id, key, idMap);
+        if (!imdbId) { stats.excludedNoImdb++; continue; }
+        nextIndian.push({ meta: toMeta(item, type, imdbId), date: (item.release_date || '').slice(0, 10), indian: true });
+      }
+    }
+    for (let p = 1; p <= 3 && nextGlobal.length < ROW_CAP - nextIndian.length; p++) {
+      const page = await tmdb('/discover/movie', key, {
+        sort_by: 'popularity.desc',
+        'primary_release_date.gte': nextFrom,
+        'primary_release_date.lte': nextTo,
+        page: p,
+      });
+      for (const item of page.results || []) {
+        if (nextGlobal.length >= ROW_CAP - nextIndian.length) break;
+        if (nextSeen.has(item.id)) continue;
+        nextSeen.add(item.id);
+        if (isIndianTitle(item)) continue;
+        const imdbId = await resolveImdb(type, item.id, key, idMap);
+        if (!imdbId) { stats.excludedNoImdb++; continue; }
+        nextGlobal.push({ meta: toMeta(item, type, imdbId), date: (item.release_date || '').slice(0, 10), indian: false });
+      }
+    }
+    const nextMerged = [...nextIndian, ...nextGlobal]
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    const nextSliced = nextMerged.slice(0, ROW_CAP);
+    stats.releasingNext30 = stats.releasingNext30 || {};
+    stats.releasingNext30.movie = {
+      total: nextSliced.length,
+      indian: nextSliced.filter((x) => x.indian).length,
+      worldwide: nextSliced.filter((x) => !x.indian).length,
+      windowDays: nextDays,
+    };
+    rows['releasing-next-30-days'] = nextSliced.map((x) => x.meta);
   } else {
-    nextBase['first_air_date.gte'] = nextFrom;
-    nextBase['first_air_date.lte'] = nextTo;
+    // v1.3.3 series: two passes, 10/10. (A) New premieres — the old
+    // first_air_date discover, unchanged except the target is now 10.
+    // (B) Returning seasons — two sub-passes sharing one detail check:
+    // a season premiering in the window, accepted as EITHER a next
+    // episode that is a season premiere (SxxE01 in the window) OR any
+    // season (number >= 1) whose air_date is in the window — both are
+    // TMDB data, never invented; season 0 (Specials) is excluded. The
+    // seasons[] half exists because TMDB's show-level fields are stale
+    // for Indian web series: Dhindora's S2 episodes carry air_date
+    // 2026-11-20 (proven via the live meta endpoint) yet the #9 row —
+    // built on status/next_episode_to_air — lacks Dhindora entirely.
+    // B1 (global returning): discover with_status=0 + air_date window
+    // (the #9 approach; build 1 proved it finds 10). B2 (Indian
+    // stale-status): discover with_origin_country=IN + air_date window,
+    // NO status filter. Build 2 dropped with_status GLOBALLY and got 0
+    // returning — the unfiltered pool drowns the signal — so the
+    // unfiltered scan is scoped to Indian titles only, where Dhindora
+    // lives. Merged by air date ASC (soonest first): this is a release
+    // calendar, and date-asc is what puts tomorrow's premiere (Dhindora
+    // S2, 20 Nov) on top — the old popularity order is what buried
+    // Indian titles. A show in both passes is deduped (returning passes
+    // skip premiere ids).
+    const premPairs = [];
+    const premSeen = new Set();
+    for (let p = 1; p <= SERIES_REFILL_PAGES_STANDARD && premPairs.length < REL_NEXT_PREMIERE_TARGET; p++) {
+      const page = await tmdb('/discover/tv', key, {
+        sort_by: 'popularity.desc',
+        'first_air_date.gte': nextFrom,
+        'first_air_date.lte': nextTo,
+        page: p,
+      });
+      const fresh = (page.results || []).filter((it) => !premSeen.has(it.id));
+      if (!fresh.length) continue;
+      const made = await mapLimit(fresh, CONCURRENCY, (item) => seriesMeta(item, key, idMap, seriesCache, stats));
+      for (let i = 0; i < fresh.length; i++) {
+        premSeen.add(fresh[i].id);
+        if (premPairs.length >= REL_NEXT_PREMIERE_TARGET) break;
+        if (made[i]) premPairs.push({ meta: made[i], date: (fresh[i].first_air_date || '').slice(0, 10), kind: 'premiere' });
+      }
+    }
+    const retPairs = [];
+    const retSeen = new Set();
+    async function checkReturning(item) {
+      const res = await resolveSeriesItem(item, key, idMap, seriesCache);
+      if (!res.imdbId) { stats.excludedNoImdb++; return null; }
+      const reason = tvShowExcludeReason(res.detail);
+      if (reason) { noteTvShowExcluded(stats, res.detail, reason); return null; }
+      let airDate = null;
+      const next = res.detail.next_episode_to_air;
+      if (next && next.air_date && next.episode_number === 1) {
+        const d = next.air_date.slice(0, 10);
+        if (d >= nextFrom && d <= nextTo) airDate = d;
+      }
+      if (!airDate) {
+        const seasons = res.detail.seasons || [];
+        for (const s of seasons) {
+          if ((s.season_number || 0) < 1) continue;
+          const d = (s.air_date || '').slice(0, 10);
+          if (d && d >= nextFrom && d <= nextTo) { airDate = d; break; }
+        }
+      }
+      if (!airDate) return null;
+      return { meta: toMeta(item, 'series', res.imdbId), airDate };
+    }
+    async function returningPass(base, maxPages) {
+      for (let p = 1; p <= maxPages && retPairs.length < ROW_CAP - premPairs.length; p++) {
+        const page = await tmdb('/discover/tv', key, { ...base, page: p });
+        const fresh = (page.results || []).filter((it) => !retSeen.has(it.id) && !premSeen.has(it.id));
+        if (!fresh.length) continue;
+        const made = await mapLimit(fresh, CONCURRENCY, checkReturning);
+        for (let i = 0; i < fresh.length; i++) {
+          retSeen.add(fresh[i].id);
+          if (retPairs.length >= ROW_CAP - premPairs.length) break;
+          if (made[i]) retPairs.push({ meta: made[i].meta, date: made[i].airDate, kind: 'returning' });
+        }
+      }
+    }
+    await returningPass({
+      sort_by: 'popularity.desc',
+      with_status: '0',
+      'air_date.gte': nextFrom,
+      'air_date.lte': nextTo,
+    }, 3);
+    await returningPass({
+      sort_by: 'popularity.desc',
+      with_origin_country: 'IN',
+      'air_date.gte': nextFrom,
+      'air_date.lte': nextTo,
+    }, 5);
+    const nextMerged = [...premPairs, ...retPairs]
+      .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    const nextSliced = nextMerged.slice(0, ROW_CAP);
+    stats.releasingNext30 = stats.releasingNext30 || {};
+    stats.releasingNext30.series = {
+      total: nextSliced.length,
+      premieres: nextSliced.filter((x) => x.kind === 'premiere').length,
+      returning: nextSliced.filter((x) => x.kind === 'returning').length,
+      windowDays: nextDays,
+    };
+    rows['releasing-next-30-days'] = nextSliced.map((x) => x.meta);
   }
-  rows['releasing-next-30-days'] = await collectDiscoverRow(path, nextBase,
-    ROW_CAP, isMovie ? 2 : SERIES_REFILL_PAGES_STANDARD, type, key, idMap,
-    isMovie ? movieCache : seriesCache, stats);
 
   // --- #7 Big Announcements 2026-2027 (both): status Planned / In
   // Production, release within the next 500 days, sort popularity.
@@ -1169,7 +1342,7 @@ async function main() {
   }
   const counts = Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, v.length]));
   console.log(`[build-catalogs] done. rows=${JSON.stringify(counts)} excludedNoImdb=${stats.excludedNoImdb} excludedTvShow=${JSON.stringify(stats.excludedTvShow)} keywords=${JSON.stringify(stats.keywords)} idMapSize=${Object.keys(idMap).length} bundleSkipped=${bundleResult.skipped} bundleHash=${bundleResult.hash.slice(0, 8)} prunedLegacy=${JSON.stringify(prunedLegacy)}`);
-  return { skipped: false, counts, excludedNoImdb: stats.excludedNoImdb, excludedTvShow: stats.excludedTvShow, keywords: stats.keywords, trendingTopUp: stats.trendingTopUp, newReleases: stats.newReleases, bundleSkipped: bundleResult.skipped, bundleHash: bundleResult.hash, prunedLegacy };
+  return { skipped: false, counts, excludedNoImdb: stats.excludedNoImdb, excludedTvShow: stats.excludedTvShow, keywords: stats.keywords, trendingTopUp: stats.trendingTopUp, newReleases: stats.newReleases, releasingNext30: stats.releasingNext30, bundleSkipped: bundleResult.skipped, bundleHash: bundleResult.hash, prunedLegacy };
 }
 
 if (require.main === module) {
