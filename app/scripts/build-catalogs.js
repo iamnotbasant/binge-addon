@@ -41,11 +41,16 @@
 // manifest, config knobs, admin labels, legacy Blob files). 17
 // catalogs remain. Dead constants + the keyword resolver went with
 // them (Sci-Fi + Thrillers were its only users).
+//
+// v1.5.6 (19 Nov 2026): buzz carry-over — India Buzzing Now has a
+// 3-day memory (buzz-state.json in Blob). Fresh Groq titles first,
+// then previous buzz titles that still pass the floor on fresh TMDB
+// data; first run seeds from today's Trending in India rows. 1 change.
 
 'use strict';
 
 const { knob } = require('../lib/config');
-const { fetchBuzzItems, groqAnalyze, matchTmdbTitle, normalizeTitle, buzzFloorPass } = require('../lib/buzz');
+const { fetchBuzzItems, groqAnalyze, matchTmdbTitle, normalizeTitle, buzzFloorPass, mergeBuzzRows, updateBuzzState, validateBuzzState, isCarryFresh, BUZZ_STATE_PATHNAME } = require('../lib/buzz');
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const IMG_BASE = 'https://image.tmdb.org/t/p/w342';
@@ -109,6 +114,7 @@ const BUZZ_MIN_VOTE = 6;      // v1.3.4 India Buzzing Now quality floor
 // vote_count >= 10; the fresh/upcoming path (released in the last 30
 // days or releasing in the next 90) needs no votes yet, or >= 6.0.
 const BUZZ_MIN_VOTES = 10;    // v1.3.4 rated-path vote_count floor.
+const BUZZ_SEED_TOP = 10;       // v1.5.6 seed: top N trending titles per type
 
 // v1.3.1: legacy per-row Blob files for REMOVED catalogs. The bundle no
 // longer carries them, but readCatalogFile falls back to the frozen
@@ -678,12 +684,15 @@ async function buildRows(type, key, idMap, stats, ctx) {
   // skipped and named in stats — never invented, never padded.
   const buzzVote = K('india-buzzing-now', 'voteFloor', BUZZ_MIN_VOTE);
   const buzzVotes = K('india-buzzing-now', 'voteCountFloor', BUZZ_MIN_VOTES);
+  const buzzFloor = { vote: buzzVote, votes: buzzVotes };
   const buzzList = (ctx.buzz && ctx.buzz[isMovie ? 'movies' : 'series']) || [];
-  const buzzMetas = [];
+  const freshMetas = [];
+  const freshEntries = [];
   const buzzSeen = new Set();
-  const buzzRowStats = { ranked: buzzList.length, matched: 0, unmatched: [], belowFloor: [], noImdb: 0 };
-  for (const cand of buzzList) {
-    if (buzzMetas.length >= ROW_CAP) break;
+  const buzzRowStats = { ranked: buzzList.length, matched: 0, unmatched: [], belowFloor: [], noImdb: 0, carried: 0, carriedTitles: [], seeded: 0 };
+  for (let fi = 0; fi < buzzList.length; fi++) {
+    const cand = buzzList[fi];
+    if (freshMetas.length >= ROW_CAP) break;
     // Search TMDB with the NORMALIZED title (trailer/teaser words and
     // "Season N" stripped) — the raw Groq title ("Panchayat Season 5")
     // often matches nothing, while the normalized title ("panchayat")
@@ -699,7 +708,7 @@ async function buildRows(type, key, idMap, stats, ctx) {
     }
     if (buzzSeen.has(hit.id)) continue;
     buzzSeen.add(hit.id);
-    const floor = buzzFloorPass(hit, { vote: buzzVote, votes: buzzVotes }, today);
+    const floor = buzzFloorPass(hit, buzzFloor, today);
     if (!floor.keep) {
       if (buzzRowStats.belowFloor.length < 10) {
         buzzRowStats.belowFloor.push(`${hit.title || hit.name} (va ${hit.vote_average}/vc ${hit.vote_count})`);
@@ -716,8 +725,67 @@ async function buildRows(type, key, idMap, stats, ctx) {
       meta = await seriesMeta(hit, key, idMap, seriesCache, stats);
       if (!meta) continue;
     }
-    if (meta) buzzMetas.push(meta);
+    if (meta) {
+      freshMetas.push(meta);
+      // v1.5.6: fresh titles that made the row, for the state write in
+      // main() — rank is the Groq rank (fi), the carry order after it.
+      freshEntries.push({ tmdbId: hit.id, imdbId: meta.id, title: hit.title || hit.name || meta.name, rank: fi });
+    }
   }
+  // v1.5.6: carry-over — the row has a memory now. The remaining slots
+  // fill from the persisted buzz state (previous buzz rank order),
+  // re-checked against FRESH TMDB data (floor + TV filter + IMDb) so a
+  // title that went stale can never ride in on yesterday's numbers.
+  // A carried title keeps its old lastBuzz — only fresh buzz refreshes
+  // the clock (see updateBuzzState), so 3 quiet rebuilds still drop it.
+  // No state file (first run, or corrupt file) -> bootstrap from
+  // today's Trending in India row (seedBuzzStateFromTrending).
+  const carriedMetas = [];
+  let stateEntries = [];
+  if (ctx.buzzState) {
+    stateEntries = (ctx.buzzState[isMovie ? 'movies' : 'series'] || [])
+      .filter((e) => e && typeof e.tmdbId === 'number');
+  } else {
+    stateEntries = await seedBuzzStateFromTrending(rows['trending-indian'] || [], type, key, today, buzzFloor);
+    buzzRowStats.seeded = stateEntries.length;
+    ctx.buzzSeed = ctx.buzzSeed || { movies: [], series: [] };
+    ctx.buzzSeed[isMovie ? 'movies' : 'series'] = stateEntries;
+  }
+  ctx.buzzFresh = ctx.buzzFresh || { movies: [], series: [] };
+  ctx.buzzFresh[isMovie ? 'movies' : 'series'] = freshEntries;
+  stateEntries.sort((a, b) => (a.rank - b.rank));
+  for (const entry of stateEntries) {
+    if (freshMetas.length + carriedMetas.length >= ROW_CAP) break;
+    if (buzzSeen.has(entry.tmdbId)) continue; // already in the fresh row
+    // Defensive: the writer prunes, so a loaded entry is fresh; a
+    // missing lastBuzz (e.g. a hand-written entry) is treated as fresh
+    // rather than silently dropped.
+    if (entry.lastBuzz && !isCarryFresh(entry.lastBuzz, todayStr)) continue;
+    const res = isMovie
+      ? await resolveMovieItem({ id: entry.tmdbId }, key, idMap, movieCache)
+      : await resolveSeriesItem({ id: entry.tmdbId }, key, idMap, seriesCache);
+    if (!res || !res.imdbId) { buzzRowStats.noImdb++; continue; }
+    if (!isMovie) {
+      const reason = tvShowExcludeReason(res.detail);
+      if (reason) { noteTvShowExcluded(stats, res.detail, reason); continue; }
+    }
+    const floor = buzzFloorPass(res.detail, buzzFloor, today);
+    if (!floor.keep) {
+      if (buzzRowStats.belowFloor.length < 10) {
+        buzzRowStats.belowFloor.push(`${res.detail.title || res.detail.name} (va ${res.detail.vote_average}/vc ${res.detail.vote_count})`);
+      }
+      continue;
+    }
+    const meta = toMeta(res.detail, type, res.imdbId);
+    if (meta) {
+      carriedMetas.push(meta);
+      buzzSeen.add(entry.tmdbId);
+      buzzRowStats.carried++;
+      if (buzzRowStats.carriedTitles.length < 10) buzzRowStats.carriedTitles.push(meta.name);
+    }
+  }
+  // Fresh first (Groq rank order), carried after, deduped + capped.
+  const buzzMetas = mergeBuzzRows(freshMetas, carriedMetas, ROW_CAP);
   rows['india-buzzing-now'] = buzzMetas;
   stats.buzz = stats.buzz || {};
   stats.buzz[type] = { total: buzzMetas.length, ...buzzRowStats };
@@ -1187,6 +1255,76 @@ async function readIdMap() {
   }
 }
 
+// v1.5.6: one-time bootstrap for the buzz state — with no state
+// file, seed the memory from TODAY's Trending in India row (top 10,
+// floor-passing only). The trending row is already TV-filter-clean
+// for series, so no re-filter is needed; the floor is checked via
+// TMDB /find by IMDb id (exact — no fuzzy search). The returned
+// entries carry no dates; updateBuzzState stamps firstSeen/lastBuzz
+// = today when it inserts them. Runs once — after the seed, the
+// state evolves only from real buzz.
+async function seedBuzzStateFromTrending(trendMetas, type, key, today, floor) {
+  const out = [];
+  const todayStr = isoDate(today);
+  const list = (trendMetas || []).slice(0, BUZZ_SEED_TOP);
+  for (let i = 0; i < list.length; i++) {
+    const meta = list[i];
+    if (!meta || !meta.id) continue;
+    try {
+      const res = await tmdb(`/find/${meta.id}`, key, { external_source: 'imdb_id' });
+      const found = type === 'movie'
+        ? (res.movie_results || [])[0]
+        : (res.tv_results || [])[0];
+      if (!found) continue;
+      if (!buzzFloorPass(found, floor, today).keep) continue;
+      // Stamped today: the seed IS today's signal, so the carry loop
+      // (which skips entries older than 3 days) treats it as fresh.
+      out.push({ tmdbId: found.id, imdbId: meta.id, title: found.title || found.name || meta.name, firstSeen: todayStr, lastBuzz: todayStr, rank: i, seeded: true });
+    } catch (e) {
+      console.log(`[build-catalogs] buzz seed /find failed for ${meta.id}: ${e.message}`);
+    }
+  }
+  return out;
+}
+
+// v1.5.6: buzz carry-over state (buzz-state.json in Blob root).
+// Read by direct public URL (SIMPLE request) — deliberately NOT
+// readBlobJson: a corrupt state file must return null WITHOUT tripping
+// blob.js's directBroken flag (which would poison the bundle read
+// that follows). Any failure — missing file, bad JSON, wrong shape —
+// returns null and the buzz section seeds from trending instead.
+// Never throws.
+async function readBuzzState(fetchImpl) {
+  const f = fetchImpl || global.fetch;
+  try {
+    const { publicBaseUrl } = require('../lib/blob');
+    const res = await f(`${publicBaseUrl()}/${BUZZ_STATE_PATHNAME}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    return validateBuzzState(json);
+  } catch (e) {
+    return null;
+  }
+}
+
+// Write the updated state (one put per rebuild — the state changes
+// daily by design, so there is no hash-skip; ~30 Advanced requests a
+// month, on top of the bundle's ~1/day). Never throws: a failed state
+// write must never fail the rebuild — tomorrow's run re-derives from
+// the last good state (or re-seeds).
+async function writeBuzzState(state, token) {
+  try {
+    const { put } = require('@vercel/blob');
+    await put(BUZZ_STATE_PATHNAME, JSON.stringify(state), {
+      access: 'public', token, addRandomSuffix: false, allowOverwrite: true,
+    });
+    return true;
+  } catch (e) {
+    console.log(`[build-catalogs] buzz state write failed (non-fatal): ${e.message}`);
+    return false;
+  }
+}
+
 // v1.3.4: fetch today's buzz ONCE per rebuild (all three sources in
 // parallel + one Groq ranking call) and store the ranked title lists
 // in ctx.buzz for buildRows to consume per type. NEVER throws: a dead
@@ -1195,10 +1333,17 @@ async function readIdMap() {
 // stats record exactly what happened so the row is debuggable, not
 // silently empty.
 async function collectBuzz() {
-  const out = { movies: [], series: [], sources: null, groq: { ok: false, error: 'not run' } };
+  const out = { movies: [], series: [], sources: null, groq: { ok: false, error: 'not run' }, fetchedTitles: [] };
   try {
     const fetched = await fetchBuzzItems();
     out.sources = fetched.sources;
+    // v1.5.6: raw fetched titles feed the state refresh (a title that
+    // is still being discussed but missed Groq's 15-cap ranked list
+    // still counts as fresh buzz — see updateBuzzState).
+    out.fetchedTitles = (fetched.items || [])
+      .map((it) => it && it.title)
+      .filter((t) => typeof t === 'string' && t.trim())
+      .slice(0, 100);
     const groqKey = process.env.GROQ_API_KEY;
     if (!groqKey) { out.groq = { ok: false, error: 'no GROQ_API_KEY' }; return out; }
     if (!fetched.items.length) { out.groq = { ok: false, error: 'no buzz items' }; return out; }
@@ -1240,9 +1385,17 @@ async function main() {
     ctx.buzz = await collectBuzz();
     stats.buzz = { sources: ctx.buzz.sources, groq: ctx.buzz.groq };
   } catch (e) {
-    ctx.buzz = { movies: [], series: [], sources: null, groq: { ok: false, error: String(e.message || e).slice(0, 120) } };
+    ctx.buzz = { movies: [], series: [], sources: null, groq: { ok: false, error: String(e.message || e).slice(0, 120) }, fetchedTitles: [] };
     stats.buzz = { sources: null, groq: ctx.buzz.groq };
   }
+  // v1.5.6: load the buzz carry-over state (never throws — a missing
+  // or corrupt file returns null and the buzz section seeds from
+  // trending instead). buzzFresh/buzzSeed are filled by buildRows per
+  // type; fetchedTitles feeds the state's fresh-buzz refresh.
+  ctx.buzzState = await readBuzzState();
+  ctx.buzzFresh = { movies: [], series: [] };
+  ctx.buzzSeed = { movies: [], series: [] };
+  ctx.buzzFetchedTitles = (ctx.buzz && ctx.buzz.fetchedTitles) || [];
   const rows = {};
   for (const type of ['movie', 'series']) {
     const built = await buildRows(type, key, idMap, stats, ctx);
@@ -1270,6 +1423,21 @@ async function main() {
     ),
   };
   const bundleResult = await writeBundle(rows, idMap, summary, builtAt, token);
+  // v1.5.6: persist the updated buzz state (fresh titles + seed +
+  // fetched-title refresh, 3-day expiry). Runs after the bundle write
+  // so the state only advances for rows that actually published.
+  // Never throws and never blocks the rebuild.
+  let buzzStateReport = null;
+  try {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const updated = updateBuzzState(ctx.buzzState, ctx.buzzFresh, ctx.buzzSeed, ctx.buzzFetchedTitles, todayStr);
+    buzzStateReport = updated.report;
+    await writeBuzzState(updated.state, token);
+  } catch (e) {
+    console.log(`[build-catalogs] buzz state update failed (non-fatal): ${e.message}`);
+  }
+  stats.buzz = stats.buzz || {};
+  stats.buzz.state = { loaded: !!ctx.buzzState, ...(buzzStateReport || {}) };
   // v1.3.1: prune legacy per-row files for removed catalogs (see
   // REMOVED_LEGACY_ROWS). Runs even when the bundle put is skipped —
   // the legacy file is stale either way. HEAD first (SIMPLE request);

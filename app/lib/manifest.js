@@ -72,7 +72,7 @@ function catalogs() {
 
 const MANIFEST = {
   id: 'com.bharatstreams',
-  version: '1.5.5',
+  version: '1.5.6',
   name: 'Binge Addon',
   description:
     'Free Hindi-first Indian catalogs and streams. Trending India + Worldwide, New Releases — India + Worldwide, India Buzzing Now, Fresh Digital Drops, Latest Indian Movies & Web Series, Releasing Next 30 Days, Big Announcements, Returning Soon and Now in Theatres, with Hindi 1080p streams first. This product uses the TMDB API but is not endorsed or certified by TMDB.',

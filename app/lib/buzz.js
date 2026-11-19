@@ -28,6 +28,11 @@
 // or a >= 6.0 average (fresh path). Titles below the floor are dropped
 // and named in stats, never faked in.
 //
+// v1.5.6: buzz carry-over — the row now has a 3-day memory
+// (buzz-state.json in Blob). Fresh Groq titles go first; the rest of
+// the row fills from previous buzz titles that still pass the floor
+// on fresh TMDB data. A title with no fresh buzz for 3 rebuilds
+// drops out; the first run seeds from today's Trending in India rows.
 // TMDB is the source of truth for matching (title -> TMDB id via
 // /search; never invented; unmatched titles are skipped and named).
 // The Groq key comes ONLY from process.env.GROQ_API_KEY (set in Vercel,
@@ -416,9 +421,167 @@ function buzzFloorPass(item, floor, today) {
   return { keep: false };
 }
 
+// --- Buzz carry-over state (v1.5.6) ---
+// The row had no memory: Groq re-ranks from scratch every rebuild,
+// so a huge title could vanish run to run (19 Nov 2026: Ramayana
+// 7.5/57 was in the row at 17:12 IST, gone at 18:52 IST — not the
+// floor, not the match, just a fresh ranking). The state file gives
+// the row a 3-day memory: a title that was buzzing stays in the row
+// while it still passes the floor on FRESH TMDB data, unless it has
+// had no fresh buzz for 3 straight rebuilds.
+//
+// State shape (Vercel Blob, buzz-state.json, one put per rebuild):
+//   { version: 1, updatedAt: "YYYY-MM-DD",
+//     movies: [{ tmdbId, imdbId, title, firstSeen, lastBuzz, rank, seeded? }],
+//     series: [...] }
+// lastBuzz = date of the last rebuild where Groq ranked the title OR
+// it appeared in that rebuild's fetched buzz items. Carrying a title
+// into a row does NOT refresh lastBuzz — only fresh buzz does — so a
+// title with 3 quiet rebuilds still drops out. The file is tiny
+// (<= 40 entries per type) and a missing/corrupt file is a bootstrap,
+// never a build failure.
+const BUZZ_STATE_PATHNAME = 'buzz-state.json';
+const BUZZ_CARRY_DAYS = 3;
+const BUZZ_STATE_MAX_PER_TYPE = 40;
+
+function daysBetween(aStr, bStr) {
+  const a = Date.parse(`${aStr}T00:00:00Z`);
+  const b = Date.parse(`${bStr}T00:00:00Z`);
+  if (Number.isNaN(a) || Number.isNaN(b)) return Infinity; // unparseable -> stale
+  return Math.round((b - a) / (24 * 60 * 60 * 1000));
+}
+
+function isCarryFresh(lastBuzz, todayStr) {
+  return daysBetween(lastBuzz, todayStr) <= BUZZ_CARRY_DAYS;
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function validateBuzzState(json) {
+  if (!json || typeof json !== 'object' || Array.isArray(json)) return null;
+  const cleanList = (arr) => (Array.isArray(arr) ? arr : [])
+    .filter((e) => e && typeof e.tmdbId === 'number'
+      && typeof e.imdbId === 'string' && /^tt\d+$/.test(e.imdbId)
+      && typeof e.title === 'string' && e.title.trim()
+      && typeof e.firstSeen === 'string' && DATE_RE.test(e.firstSeen)
+      && typeof e.lastBuzz === 'string' && DATE_RE.test(e.lastBuzz)
+      && typeof e.rank === 'number')
+    .map((e) => ({
+      tmdbId: e.tmdbId, imdbId: e.imdbId, title: e.title,
+      firstSeen: e.firstSeen, lastBuzz: e.lastBuzz, rank: e.rank,
+      ...(e.seeded ? { seeded: true } : {}),
+    }));
+  return {
+    version: 1,
+    updatedAt: typeof json.updatedAt === 'string' ? json.updatedAt : '',
+    movies: cleanList(json.movies),
+    series: cleanList(json.series),
+  };
+}
+
+// Does a raw fetched headline count as fresh buzz for a state title?
+// Exact/prefix match on the normalized titles, plus a core-word
+// fallback (the state's first word, len >= 4, as a whole word in the
+// headline — "ramayana box office day 14" refreshes Ramayana). This
+// is a REFRESH-ONLY signal: it can extend a carried title's life, it
+// can never add a row entry (that still needs Groq rank + TMDB match
+// + floor), so a loose match here is low-risk.
+function matchesBuzzTitle(fetchedRaw, stateTitle, type) {
+  const f = normalizeTitle(fetchedRaw, type);
+  const s = normalizeTitle(stateTitle, type);
+  if (!f || !s) return false;
+  if (f === s) return true;
+  if (f.startsWith(s + ' ') || f.startsWith(s + ':')
+    || s.startsWith(f + ' ') || s.startsWith(f + ':')) return true;
+  const first = s.split(/[:\s]+/)[0];
+  if (first && first.length >= 4 && f.split(/[:\s]+/).includes(first)) return true;
+  return false;
+}
+
+// Fresh titles first (Groq rank order), then carried titles, deduped
+// by catalog id (imdbId) and capped. Pure — the row merge in one place.
+function mergeBuzzRows(freshMetas, carriedMetas, cap) {
+  const out = [];
+  const seen = new Set();
+  for (const m of [...(freshMetas || []), ...(carriedMetas || [])]) {
+    if (!m || !m.id) continue;
+    if (seen.has(m.id)) continue;
+    seen.add(m.id);
+    out.push(m);
+    if (out.length >= cap) break;
+  }
+  return out;
+}
+
+// Compute the next buzz state. prev may be null (no file / corrupt —
+// bootstrap). fresh/seeded are { movies: [...], series: [...] } entry
+// lists ({ tmdbId, imdbId, title, rank }); fetchedTitles is the flat
+// list of raw buzz-item titles from this rebuild. Pure and never
+// throws on bad input — bad entries are dropped, never crash the build.
+// Returns { state, report }.
+function updateBuzzState(prev, fresh, seeded, fetchedTitles, todayStr) {
+  const next = { version: 1, updatedAt: todayStr, movies: [], series: [] };
+  const report = {
+    expired: { movies: 0, series: 0 },
+    stored: { movies: 0, series: 0 },
+    seeded: { movies: 0, series: 0 },
+    refreshed: { movies: 0, series: 0 },
+  };
+  const fetched = Array.isArray(fetchedTitles) ? fetchedTitles : [];
+  for (const type of ['movies', 'series']) {
+    const mediaType = type === 'movies' ? 'movie' : 'series';
+    const byId = new Map();
+    for (const e of (prev && Array.isArray(prev[type]) ? prev[type] : [])) {
+      if (e && typeof e.tmdbId === 'number') byId.set(e.tmdbId, { ...e });
+    }
+    // Fresh-buzz refresh: any state title appearing in today's fetched
+    // items resets its clock (even when Groq did not rank it — the
+    // ranked list caps at 15, so a still-discussed title can miss it).
+    for (const e of byId.values()) {
+      if (fetched.some((t) => matchesBuzzTitle(t, e.title, mediaType))) {
+        if (e.lastBuzz !== todayStr) report.refreshed[type]++;
+        e.lastBuzz = todayStr;
+      }
+    }
+    // Fresh row titles upsert (lastBuzz = today, rank = Groq rank).
+    for (const f of (fresh && Array.isArray(fresh[type]) ? fresh[type] : [])) {
+      if (!f || typeof f.tmdbId !== 'number' || !f.imdbId) continue;
+      const old = byId.get(f.tmdbId);
+      byId.set(f.tmdbId, {
+        tmdbId: f.tmdbId, imdbId: f.imdbId, title: f.title,
+        firstSeen: old ? old.firstSeen : todayStr, lastBuzz: todayStr, rank: f.rank,
+      });
+    }
+    // Seed insert (first run only — never overwrites an existing entry).
+    for (const s of (seeded && Array.isArray(seeded[type]) ? seeded[type] : [])) {
+      if (!s || typeof s.tmdbId !== 'number' || !s.imdbId) continue;
+      if (!byId.has(s.tmdbId)) {
+        byId.set(s.tmdbId, {
+          tmdbId: s.tmdbId, imdbId: s.imdbId, title: s.title,
+          firstSeen: todayStr, lastBuzz: todayStr, rank: s.rank, seeded: true,
+        });
+        report.seeded[type]++;
+      }
+    }
+    // Prune: no fresh buzz for more than 3 days -> out of the memory.
+    const kept = [];
+    for (const e of byId.values()) {
+      if (daysBetween(e.lastBuzz, todayStr) <= BUZZ_CARRY_DAYS) kept.push(e);
+      else report.expired[type]++;
+    }
+    kept.sort((a, b) => (a.rank - b.rank) || String(a.title).localeCompare(String(b.title)));
+    next[type] = kept.slice(0, BUZZ_STATE_MAX_PER_TYPE);
+    report.stored[type] = next[type].length;
+  }
+  return { state: next, report };
+}
+
 module.exports = {
   GROQ_MODEL, BUZZ_MAX_RANKED, REDDIT_SUBS, YOUTUBE_QUERIES, NEWS_QUERIES,
   fetchBuzzItems, fetchReddit, fetchRedditToken, fetchYouTube, fetchNews,
   parseRedditHot, parseYouTubeSearch, extractYtInitialData, parseNewsRss,
   groqAnalyze, parseGroqResponse, normalizeTitle, matchTmdbTitle, buzzFloorPass,
+  BUZZ_STATE_PATHNAME, BUZZ_CARRY_DAYS, BUZZ_STATE_MAX_PER_TYPE,
+  daysBetween, isCarryFresh, validateBuzzState, matchesBuzzTitle,
+  mergeBuzzRows, updateBuzzState,
 };
