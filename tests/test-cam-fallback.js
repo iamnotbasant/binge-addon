@@ -2,13 +2,14 @@
 // RULE (locked): CAM/TeleCine/TeleSync/HDTS/HDTC/DVDScr/SCR streams stay
 // HIDDEN whenever clean streams exist (v1.0.3 stands). They appear ONLY
 // as a last resort when a title has ZERO clean streams after filtering,
-// and every shown CAM stream is CLEARLY marked in its line 2
-// ("📹 1080p CAM TeleCine", CAM + kind). v1.1.3 (basant: "note likhne ke
-// jarurat nahi hai bhai"): the extra "Note: CAM print — theatre
-// recording" line is GONE — the line-2 CAM marking is the whole warning
-// now. v1.1.4: the labeled "Quality:" line is gone too — CAM lived in
-// the compact line 1. v1.1.5: blueprint layout — CAM lives in line 2
-// ("📹 1080p CAM TeleCine"), the NAME is the 🚀 FHD header.
+// and every shown CAM stream is CLEARLY marked in its Quality line
+// ("Quality: 1080p CAM TeleCine", CAM + kind). v1.1.3 (basant: "note
+// likhne ke jarurat nahi hai bhai"): the extra "Note: CAM print —
+// theatre recording" line is GONE — the Quality-line CAM marking is the
+// whole warning now. v1.2.1 (basant: "formate phele jaise hi kar do
+// bhai"): the display format is the locked v1.1.3 Telegram shape again —
+// name is the title ("Ramayana (2026)"), CAM lives in the Quality line,
+// no emoji/flags/codes anywhere.
 //
 // Fixtures are REAL live Torrentio rows captured 18 Nov 2026 ~18:30 IST:
 //   tests/fixtures/ramayana-torrentio-20261118.json  (43 rows, ALL CAM)
@@ -63,13 +64,13 @@ const ramMerge = mergeStreamResults([{ name: 'torrentio', streams: ram.kept, cam
 eq(ramMerge.usedCam, true, 'merge falls back to CAM when clean is empty');
 eq(ramMerge.parsed.length, 36, 'merge returns all 36 CAM streams (under cap 40)');
 const ramOut = ramMerge.parsed.map(formatStream);
-check(ramOut.every((o) => (o.description.split('\n')[1] || '').includes('CAM')), 'every CAM stream has CAM in its line 2 (📹 … CAM …)');
+check(ramOut.every((o) => (o.description.split('\n')[0] || '').includes('CAM')), 'every CAM stream has CAM in its Quality line (first line)');
 check(ramOut.every((o) => !/Note:/.test(o.description)), 'no Note line in any CAM stream description (v1.1.3: Note line removed)');
 check(ramOut.every((o) => !/CAM/.test(o.name)), 'CAM never leaks into the name');
-eq(ramOut[0].name, '🚀 FHD', 'first CAM stream name (resolution header)');
+eq(ramOut[0].name, 'Ramayana (2026)', 'first CAM stream name (title + year)');
 eq(ramOut[0].description,
-  '🎬 Ramayana (2026)\n📹 1080p CAM TeleCine\n📦 6.38 GB\n🏷️ 1O8Op\n🔍 Torrentio',
-  'first CAM stream description (exact)');
+  'Quality: 1080p CAM TeleCine\nSize: 6.38 GB',
+  'first CAM stream description (exact, reverted Telegram format)');
 
 // ---------------------------------------------------------------------------
 // 3. Mixed title: REAL Jailer 2 rows — CAM must stay hidden
@@ -87,10 +88,10 @@ const jaiOut = jaiMerge.parsed.map(formatStream);
 check(!jaiOut.some((o) => /CAM/.test(`${o.name}\n${o.description}`)),
   'ZERO CAM anywhere in the mixed-title output (name or description)');
 check(!jaiOut.some((o) => /Note: CAM print/.test(o.description)), 'no CAM Note line in clean output');
-eq(jaiOut[0].name, '🚀 FHD', 'first clean stream name (resolution header)');
+eq(jaiOut[0].name, 'Jailer 2 (2026)', 'first clean stream name (title + year)');
 eq(jaiOut[0].description,
-  '🎬 Jailer 2 (2026)\n📹 HDRip 🎞️ HEVC\n🎧 DD+ 🔊 5.1 🌐 🇮🇳 / 🇬🇧\n📦 1.57 GB\n🏷️ NOGRP\n🔍 Torrentio',
-  'first clean stream description (blueprint format v1.1.5)');
+  'Quality: 1080p HDRip\nAudio: Hindi + English | DD+ 5.1\nSize: 1.57 GB',
+  'first clean stream description (locked Telegram format v1.1.3, restored v1.2.1)');
 
 // ---------------------------------------------------------------------------
 // 4. Clean-only title: Dangal corpus rows — unchanged behaviour
