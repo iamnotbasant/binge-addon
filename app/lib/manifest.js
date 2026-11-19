@@ -25,6 +25,10 @@ function catalogs() {
   // #1b New Releases — India + Worldwide (v1.3.1, basant 19 Nov 2026)
   push('new-releases-movie', 'New Releases — India + Worldwide', 'movie');
   push('new-releases-series', 'New Releases — India + Worldwide', 'series');
+  // #1c India Buzzing Now (v1.3.4, basant 19 Nov 2026) — what India is
+  // actually discussing today (Reddit + YouTube + news, Groq-ranked).
+  push('india-buzzing-now-movie', 'India Buzzing Now', 'movie');
+  push('india-buzzing-now-series', 'India Buzzing Now', 'series');
   // #2 Trending Worldwide
   push('global-trending-movie', 'Trending Worldwide', 'movie');
   push('global-trending-series', 'Trending Worldwide', 'series');
@@ -72,10 +76,10 @@ function catalogs() {
 
 const MANIFEST = {
   id: 'com.bharatstreams',
-  version: '1.3.3',
+  version: '1.3.4',
   name: 'Binge Addon',
   description:
-    'Free Hindi-first Indian catalogs and streams. Trending India + Worldwide, New Releases — India + Worldwide, Fresh Digital Drops, Latest Indian Movies & Web Series, Releasing Next 30 Days, Big Announcements 2026–2027, Now in Theatres, Dark Crime, Underrated Gems, Sci-Fi & Time Travel, Thrillers, Action, Mini-Series, Visual Spectacles, Anime and All-Time Classics, with Hindi 1080p streams first. This product uses the TMDB API but is not endorsed or certified by TMDB.',
+    'Free Hindi-first Indian catalogs and streams. Trending India + Worldwide, New Releases — India + Worldwide, India Buzzing Now, Fresh Digital Drops, Latest Indian Movies & Web Series, Releasing Next 30 Days, Big Announcements 2026–2027, Now in Theatres, Dark Crime, Underrated Gems, Sci-Fi & Time Travel, Thrillers, Action, Mini-Series, Visual Spectacles, Anime and All-Time Classics, with Hindi 1080p streams first. This product uses the TMDB API but is not endorsed or certified by TMDB.',
   resources: [
     'catalog',
     { name: 'meta', types: ['movie', 'series'], idPrefixes: ['tt'] },
