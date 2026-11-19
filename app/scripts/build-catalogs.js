@@ -46,6 +46,14 @@
 // 3-day memory (buzz-state.json in Blob). Fresh Groq titles first,
 // then previous buzz titles that still pass the floor on fresh TMDB
 // data; first run seeds from today's Trending in India rows. 1 change.
+//
+// v1.5.7 (19 Nov 2026): Indian TV & Reality Shows — a dedicated row
+// for broadcast TV (Reality + Soap + Talk, origin IN, popularity
+// desc) that DELIBERATELY bypasses the v1.4 TV filter: Bigg Boss is
+// Reality type, on Colors, 100+ episodes per season — it fails all
+// three filter layers. No vote floor (TMDB rates a Bigg Boss season
+// page 3.7/10, 11 votes — any floor would kill the very title the row
+// exists for). 1 change.
 
 'use strict';
 
@@ -70,10 +78,12 @@ function isIndianTitle(item) {
 
 // --- TMDB genre ids (stable, per TMDB docs) ---
 // v1.5.5: the genre rows are gone (Sci-Fi, Thrillers, Action, Anime,
-// Dark Crime, Visual Spectacles), so only the Soap id survives — the
+// Dark Crime, Visual Spectacles), so only the Soap id survived — the
 // v1.4 TV-show filter uses it to scope the 100-episode cap to
 // Indian-origin / Soap-genre titles (see tvShowExcludeReason).
-const GENRE_TV = { soap: 10766 };
+// v1.5.7: Reality + Talk join it for the Indian TV & Reality Shows
+// row (the TV filter's own exclusions live there as content).
+const GENRE_TV = { soap: 10766, reality: 10764, talk: 10767 };
 
 // --- v2.0 row windows / floors ---
 const FRESH_DIGITAL_DAYS = 45;      // #3 Fresh Digital Drops: digital release in last 45d
@@ -115,6 +125,18 @@ const BUZZ_MIN_VOTE = 6;      // v1.3.4 India Buzzing Now quality floor
 // days or releasing in the next 90) needs no votes yet, or >= 6.0.
 const BUZZ_MIN_VOTES = 10;    // v1.3.4 rated-path vote_count floor.
 const BUZZ_SEED_TOP = 10;       // v1.5.6 seed: top N trending titles per type
+const TV_REALITY_PAGES = 2;       // v1.5.7 Indian TV & Reality Shows:
+const TV_REALITY_RESOLVE_CAP = 15; // 2 discover pages per genre pass,
+const TV_REALITY_PER_PASS_KEEP = 10; // top 15 per pass resolved, first
+ // 10 kept per pass (10/10 reserve — raw popularity is soap-dominated).
+ // NO vote floor (see the row comment — Bigg Boss rates 3.7/10).
+const TV_REALITY_ANCHOR_IMDB = 'tt1281973'; // v1.5.7 anchor: Bigg Boss
+ // is the title this row was built for (basant: "jaise ki bhai big
+ // boss"), but TMDB popularity ranks it below the Reality top 10, so
+ // no popularity cut can ever include it. The anchor is resolved live
+ // at build time via TMDB /find (exact IMDb id — verified live via the
+ // addon's own search + meta, never invented) and verified Reality +
+ // origin IN before inclusion; any failure skips it silently.
 
 // v1.3.1: legacy per-row Blob files for REMOVED catalogs. The bundle no
 // longer carries them, but readCatalogFile falls back to the frozen
@@ -492,6 +514,27 @@ async function resolveOttProviders(key, stats) {
     stats.ottProviders = { configured: [...OTT_PROVIDERS], valid: [], dropped: [...OTT_PROVIDERS], error: String((e && e.message) || e).slice(0, 80) };
     return null;
   }
+}
+
+// --- v1.5.7 Indian TV & Reality Shows anchor (pure, exported for tests) ---
+// Insert the verified anchor title (Bigg Boss) at the head of the
+// Reality half of the row. Returns new arrays (no mutation) +
+// `anchored`: the anchor name, "<name> (already in row)" when it was
+// already kept by the Reality pass, or null when there is no anchor.
+// When the Reality half is full (10), the anchor displaces its 10th
+// title so the half stays at 10 and the row stays capped at 20.
+function applyTvRealityAnchor(metas, keptVotes, anchor, realityKept) {
+  if (!anchor) return { metas, keptVotes, anchored: null };
+  if (metas.some((m) => m && m.id === anchor.meta.id)) {
+    return { metas, keptVotes, anchored: `${anchor.meta.name} (already in row)` };
+  }
+  const out = [anchor.meta, ...metas];
+  const votes = [{ name: anchor.meta.name, va: anchor.va ?? null, vc: anchor.vc ?? null }, ...keptVotes];
+  if (realityKept >= TV_REALITY_PER_PASS_KEEP) {
+    out.splice(TV_REALITY_PER_PASS_KEEP, 1);
+    votes.splice(TV_REALITY_PER_PASS_KEEP, 1);
+  }
+  return { metas: out, keptVotes: votes, anchored: anchor.meta.name };
 }
 
 async function buildRows(type, key, idMap, stats, ctx) {
@@ -921,6 +964,99 @@ async function buildRows(type, key, idMap, stats, ctx) {
       'first_air_date.lte': todayStr,
       'first_air_date.gte': seriesFrom,
     }, ROW_CAP, SERIES_REFILL_PAGES_STANDARD, type, key, idMap, seriesCache, stats);
+
+    // --- #5b Indian TV & Reality Shows (series, v1.5.7, basant 19 Nov
+    // 2026: "tv show bhi yehi add karo" — Bigg Boss jaise shows kahin
+    // nahi aate the): the home for broadcast TV — Reality + Soap +
+    // Talk, origin IN, popularity desc. This row DELIBERATELY bypasses
+    // the v1.4 TV filter (no type check, no episode cap, no network
+    // blocklist): Bigg Boss is Reality type, on Colors, with 100+
+    // episodes per season — it fails all three layers, and the series
+    // rows must keep the filter (basant ordered it 18 Nov 2026 to keep
+    // C.I.D./Kyunki/Kapil out of them). Two discover passes — Reality
+    // (10764); Soap|Talk (10766|10767, pipe = OR in TMDB with_genres).
+    // NO vote floor: probe 19 Nov 2026 — TMDB rates a Bigg Boss season
+    // page 3.7/10 (11 votes), and the other reality shows score low
+    // too, so ANY vote_average floor would kill the very title the row
+    // exists for; popularity is the signal. 10/10 RESERVE (the
+    // new-releases precedent): the first v1.5.7 rebuild proved raw
+    // popularity is soap-dominated — the merged top 20 held 17 soaps/
+    // talk shows and NO Bigg Boss — so each pass keeps its own top 10
+    // (Reality first, then Soap|Talk), deduped across passes. ANCHOR:
+    // Bigg Boss still misses even the Reality top 10 on TMDB
+    // popularity (Crime Patrol, Indian Idol, Khatron Ke Khiladi, ...
+    // all rank above it), so the verified anchor
+    // (TV_REALITY_ANCHOR_IMDB) is resolved live and takes the first
+    // slot of the Reality half (see applyTvRealityAnchor). Stats carry
+    // the probe (discover totals + kept titles' vote_average/
+    // vote_count) so the rebuild response documents it.
+    // Anchor first: resolve Bigg Boss live via /find (exact IMDb id),
+    // verify Reality + origin IN; any failure skips it silently.
+    let tvAnchor = null;
+    try {
+      const found = await tmdb(`/find/${TV_REALITY_ANCHOR_IMDB}`, key, { external_source: 'imdb_id' });
+      const hit = (found && found.tv_results && found.tv_results[0]) || null;
+      if (hit) {
+        const res = await resolveSeriesItem(hit, key, idMap, seriesCache);
+        const d = res.detail || {};
+        const isReality = (d.genres || []).some((g) => g && g.id === GENRE_TV.reality);
+        const isIN = (d.origin_country || []).includes('IN');
+        if (res.imdbId && isReality && isIN) {
+          tvAnchor = { meta: toMeta(hit, 'series', res.imdbId), va: hit.vote_average, vc: hit.vote_count };
+        }
+      }
+    } catch (e) {
+      console.log(`[build-catalogs] tv-reality anchor skipped: ${e.message}`);
+    }
+    const tvRealStats = { passRealityTotal: 0, passSoapTalkTotal: 0, scanned: 0, kept: 0, realityKept: 0, soapTalkKept: 0, noImdb: 0, keptVotes: [], anchored: null };
+    const tvRealSeen = new Set();
+    const tvRealMetas = [];
+    for (const [genres, totalKey, keepKey] of [
+      [String(GENRE_TV.reality), 'passRealityTotal', 'realityKept'],
+      [`${GENRE_TV.soap}|${GENRE_TV.talk}`, 'passSoapTalkTotal', 'soapTalkKept'],
+    ]) {
+      const passItems = new Map();
+      for (let p = 1; p <= TV_REALITY_PAGES; p++) {
+        const page = await tmdb('/discover/tv', key, {
+          sort_by: 'popularity.desc',
+          with_origin_country: 'IN',
+          with_genres: genres,
+          page: p,
+        });
+        if (p === 1) tvRealStats[totalKey] = page.total_results || 0;
+        for (const item of page.results || []) {
+          if (!passItems.has(item.id)) passItems.set(item.id, item);
+        }
+      }
+      const passSorted = [...passItems.values()]
+        .sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+      tvRealStats.scanned += passSorted.length;
+      const passTop = passSorted.slice(0, TV_REALITY_RESOLVE_CAP);
+      const passMade = await mapLimit(passTop, CONCURRENCY, async (item) => {
+        const res = await resolveSeriesItem(item, key, idMap, seriesCache);
+        if (!res.imdbId) { stats.excludedNoImdb++; tvRealStats.noImdb++; return null; }
+        return { meta: toMeta(item, 'series', res.imdbId), va: item.vote_average, vc: item.vote_count };
+      });
+      let passKept = 0;
+      for (const made of passMade) {
+        if (passKept >= TV_REALITY_PER_PASS_KEEP) break;
+        if (!made) continue;
+        if (tvRealSeen.has(made.meta.id)) continue; // already kept via the other pass
+        tvRealSeen.add(made.meta.id);
+        tvRealMetas.push(made.meta);
+        passKept++;
+        if (tvRealStats.keptVotes.length < ROW_CAP) {
+          tvRealStats.keptVotes.push({ name: made.meta.name, va: made.va ?? null, vc: made.vc ?? null });
+        }
+      }
+      tvRealStats[keepKey] = passKept;
+    }
+    const anchored = applyTvRealityAnchor(tvRealMetas, tvRealStats.keptVotes, tvAnchor, tvRealStats.realityKept);
+    tvRealStats.keptVotes = anchored.keptVotes;
+    tvRealStats.anchored = anchored.anchored;
+    tvRealStats.kept = anchored.metas.length;
+    stats.indianTvReality = tvRealStats;
+    rows['indian-tv-reality'] = anchored.metas.slice(0, ROW_CAP);
 
     // --- #8 Newly Announced Web Series: REMOVED in v1.4.3 — it was a
     // near-duplicate of Big Announcements Series (same with_status=1|2
@@ -1469,7 +1605,7 @@ async function main() {
   }
   const counts = Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, v.length]));
   console.log(`[build-catalogs] done. rows=${JSON.stringify(counts)} excludedNoImdb=${stats.excludedNoImdb} excludedTvShow=${JSON.stringify(stats.excludedTvShow)} idMapSize=${Object.keys(idMap).length} bundleSkipped=${bundleResult.skipped} bundleHash=${bundleResult.hash.slice(0, 8)} prunedLegacy=${JSON.stringify(prunedLegacy)}`);
-  return { skipped: false, counts, excludedNoImdb: stats.excludedNoImdb, excludedTvShow: stats.excludedTvShow, ottProviders: stats.ottProviders, trendingTopUp: stats.trendingTopUp, newReleases: stats.newReleases, releasingNext30: stats.releasingNext30, buzz: stats.buzz, bundleSkipped: bundleResult.skipped, bundleHash: bundleResult.hash, prunedLegacy };
+  return { skipped: false, counts, excludedNoImdb: stats.excludedNoImdb, excludedTvShow: stats.excludedTvShow, ottProviders: stats.ottProviders, trendingTopUp: stats.trendingTopUp, newReleases: stats.newReleases, releasingNext30: stats.releasingNext30, buzz: stats.buzz, indianTvReality: stats.indianTvReality, bundleSkipped: bundleResult.skipped, bundleHash: bundleResult.hash, prunedLegacy };
 }
 
 if (require.main === module) {
@@ -1479,4 +1615,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main, buildRows, isIndianTitle, collectBuzz, resolveOttProviders, tvShowExcludeReason };
+module.exports = { main, buildRows, isIndianTitle, collectBuzz, resolveOttProviders, tvShowExcludeReason, applyTvRealityAnchor };

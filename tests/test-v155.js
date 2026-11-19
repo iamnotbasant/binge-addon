@@ -4,9 +4,9 @@
 // 1-Season Binge, Visual Spectacles, Action Anime, All-Time Classics).
 //
 // Covers, with a stubbed TMDB fetch (no key, no network):
-// (0) manifest + config — 17 catalogs in the exact final order,
+// (0) manifest + config — 18 catalogs in the exact final order,
 //     all 12 removed ids gone from manifest/config/knobs, upcoming
-//     rows last (indices 11-16, relative order kept), Big
+//     rows last (indices 12-17, relative order kept), Big
 //     Announcements name is the dynamic currentYear–nextYear;
 // (1) episode-cap scoping (tvShowExcludeReason, direct) — the v1.4
 //     TV filter survives the removal: JP 148 and US 200 pass, IN 150
@@ -52,7 +52,7 @@ const EXPECTED_ORDER = [
   'india-buzzing-now-movie', 'india-buzzing-now-series',
   'global-trending-movie', 'global-trending-series',
   'fresh-digital-drops-movie', 'latest-indian-ott-movie',
-  'latest-indian-series-series',
+  'latest-indian-series-series', 'indian-tv-reality-series',
   'releasing-next-30-days-movie', 'releasing-next-30-days-series',
   'big-announcements-movie', 'big-announcements-series',
   'returning-soon-series', 'now-in-theatres-movie',
@@ -64,8 +64,8 @@ const EXPECTED_ORDER = [
 console.log('=== 0. Manifest + config (12 rows removed) ===');
 {
   const list = catalogs();
-  eq(MANIFEST.version, '1.5.6', 'manifest version 1.5.6');
-  eq(list.length, 17, '17 catalogs (29 - 12 removed rows)');
+  eq(MANIFEST.version, '1.5.7', 'manifest version 1.5.7');
+  eq(list.length, 18, '18 catalogs (17 + Indian TV & Reality Shows)');
   eq(JSON.stringify(list.map((c) => c.id)), JSON.stringify(EXPECTED_ORDER), 'exact final order (watchable first, upcoming last)');
   check(REMOVED_IDS.every((id) => !list.some((c) => c.id === id)), 'all 12 removed ids gone from manifest');
   check(list.every((c) => c.extra && c.extra[0].name === 'search'), 'all remaining rows still carry the search extra');
@@ -74,13 +74,13 @@ console.log('=== 0. Manifest + config (12 rows removed) ===');
   eq(list.find((c) => c.id === 'big-announcements-series').name, `Big Announcements ${y}–${y + 1}`, 'big-announcements series name is dynamic currentYear–nextYear');
   const last6 = list.slice(-6).map((c) => c.id);
   eq(JSON.stringify(last6), JSON.stringify(['releasing-next-30-days-movie', 'releasing-next-30-days-series', 'big-announcements-movie', 'big-announcements-series', 'returning-soon-series', 'now-in-theatres-movie']), 'upcoming rows last, relative order kept');
-  eq(list[10].id, 'latest-indian-series-series', 'last watchable row is Latest Indian Web Series');
+  eq(list[11].id, 'indian-tv-reality-series', 'last watchable row is Indian TV & Reality Shows');
   const cfg = defaultConfig();
-  eq(Object.keys(cfg.catalogs).length, 17, 'config carries 17 catalogs');
+  eq(Object.keys(cfg.catalogs).length, 18, 'config carries 18 catalogs');
   check(REMOVED_IDS.every((id) => !(id in cfg.catalogs)), 'removed ids gone from config catalogs');
   check(REMOVED_KNOBS.every((k) => !(k in cfg.knobs)), 'removed knobs gone from config defaults');
   const eff = effectiveCatalogs(cfg);
-  eq(eff.length, 17, 'effectiveCatalogs still 17');
+  eq(eff.length, 18, 'effectiveCatalogs still 18');
   eq(JSON.stringify(eff.map((c) => c.id)), JSON.stringify(EXPECTED_ORDER), 'effectiveCatalogs order matches');
   eq(eff.find((c) => c.id === 'big-announcements-movie').name, `Big Announcements ${y}–${y + 1}`, 'effectiveCatalogs big name is dynamic even with a stored stale name');
 }

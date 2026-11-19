@@ -4,7 +4,7 @@
 // the match, just a fresh Groq ranking with no memory).
 //
 // Covers, with stubbed TMDB fetch (no keys, no network):
-// (0) manifest — version 1.5.6, still 17 catalogs;
+// (0) manifest — version 1.5.7, 18 catalogs (Indian TV & Reality Shows added);
 // (1) validateBuzzState — valid passthrough, null for missing/garbage,
 //     bad entries filtered, bad dates filtered;
 // (2) daysBetween / isCarryFresh — 3-day boundary (3 kept, 4 stale);
@@ -44,8 +44,8 @@ const entry = (tmdbId, imdbId, title, lastBuzz, rank) => ({
   // ---------------------------------------------------------------------------
   console.log('=== 0. Manifest ===');
   {
-    eq(MANIFEST.version, '1.5.6', 'manifest version 1.5.6');
-    eq(catalogs().length, 17, 'still 17 catalogs');
+    eq(MANIFEST.version, '1.5.7', 'manifest version 1.5.7');
+    eq(catalogs().length, 18, '18 catalogs (17 + Indian TV & Reality Shows)');
   }
 
   // ---------------------------------------------------------------------------

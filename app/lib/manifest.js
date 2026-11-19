@@ -1,9 +1,7 @@
 // Binge Addon — manifest definition (design §6.1, §6.4).
-// 17 catalogs (v1.5.5 — was 29; Dark Crime, Underrated Gems, Sci-Fi,
-// Psychological Thrillers, Action Heist & Revenge, 1-Season Binge,
-// Visual Spectacles, Action Anime and All-Time Classics removed
-// completely on basant's order). Movie+series pairs adjacent, then
-// watchable rows first and the upcoming/radar rows last (v1.4.3
+// 18 catalogs (v1.5.7 — was 17; Indian TV & Reality Shows added for
+// broadcast TV like Bigg Boss, which the v1.4 TV filter keeps out of
+// every series row). Movie+series pairs adjacent, then watchable rows
 // reorder — Nuvio opens on watchable rows, not on titles with no
 // streams yet). Manifest must stringify < 8 KB.
 //
@@ -49,6 +47,12 @@ function catalogs() {
   push('latest-indian-ott-movie', 'Latest Indian Movies — OTT Ready', 'movie');
   // #5 Latest Indian Web Series (series only)
   push('latest-indian-series-series', 'Latest Indian Web Series', 'series');
+  // #5b Indian TV & Reality Shows (series only, v1.5.7, basant 19 Nov
+  // 2026) — the home for broadcast TV: Bigg Boss, Indian Idol, KBC,
+  // Kapil Sharma Show, daily soaps. Bypasses the v1.4 TV filter by
+  // design (see the builder row comment); sits inside the watchable
+  // block, right after Latest Indian Web Series.
+  push('indian-tv-reality-series', 'Indian TV & Reality Shows', 'series');
   // v1.5.5: the genre/mood rows are gone COMPLETELY (Dark Crime,
   // Underrated Gems, Sci-Fi, Psychological Thrillers, Action, 1-Season
   // Binge, Visual Spectacles, Anime, All-Time Classics — 12 rows).
@@ -72,10 +76,10 @@ function catalogs() {
 
 const MANIFEST = {
   id: 'com.bharatstreams',
-  version: '1.5.6',
+  version: '1.5.7',
   name: 'Binge Addon',
   description:
-    'Free Hindi-first Indian catalogs and streams. Trending India + Worldwide, New Releases — India + Worldwide, India Buzzing Now, Fresh Digital Drops, Latest Indian Movies & Web Series, Releasing Next 30 Days, Big Announcements, Returning Soon and Now in Theatres, with Hindi 1080p streams first. This product uses the TMDB API but is not endorsed or certified by TMDB.',
+    'Free Hindi-first Indian catalogs and streams. Trending India + Worldwide, New Releases — India + Worldwide, India Buzzing Now, Fresh Digital Drops, Latest Indian Movies & Web Series, Indian TV & Reality Shows, Releasing Next 30 Days, Big Announcements, Returning Soon and Now in Theatres, with Hindi 1080p streams first. This product uses the TMDB API but is not endorsed or certified by TMDB.',
   resources: [
     'catalog',
     { name: 'meta', types: ['movie', 'series'], idPrefixes: ['tt'] },
