@@ -1,7 +1,14 @@
-// Binge Addon — meta resolution + fetch (v1.1.9).
+// Binge Addon — meta resolution + fetch (v1.1.9, v1.2.2).
 // The meta handler's TMDB calls, factored out so tests can stub them.
 // Flow: id-map fast path (tmdbIdForImdb) -> TMDB /find fallback ->
 // detail + credits + images -> buildMetaFromTmdb (+ series videos).
+//
+// v1.2.2: series videos are enriched with REAL episode names +
+// still thumbnails from TMDB season details
+// (/tv/{id}/season/{n}), fetched in parallel after the detail call.
+// A season fetch that fails or times out falls back to the generic
+// "Episode N" videos for that season — meta NEVER fails because of
+// this. Season results are cached in-memory (6 h TTL); no Blob writes.
 //
 // Why the /find fallback exists: the id map only holds titles currently
 // in our catalogs, but Nuvio can ask for meta for ANY title a user taps
@@ -33,7 +40,9 @@ async function findTmdbId(imdbId, type, key, fetchFn) {
 }
 
 // TMDB detail (+ credits + images) -> Stremio meta. Series get `videos`
-// synthesized from d.seasons (tt:S:E ids), same as the v2.1.0 handler.
+// synthesized from d.seasons (tt:S:E ids), same as the v2.1.0 handler,
+// then enriched (v1.2.2) with real episode names + still thumbnails +
+// overview + air date from TMDB season details (see below).
 async function fetchMetaForTmdbId(imdbId, type, tmdbId, key, fetchFn) {
   const base = type === 'movie' ? 'movie' : 'tv';
   const url = `https://api.themoviedb.org/3/${base}/${tmdbId}?api_key=${key}&append_to_response=credits,images`;
@@ -54,9 +63,79 @@ async function fetchMetaForTmdbId(imdbId, type, tmdbId, key, fetchFn) {
         });
       }
     }
-    if (videos.length) meta.videos = videos;
+    if (videos.length) {
+      // v1.2.2: enrich in parallel; any season that fails keeps its
+      // generic videos (enrichSeriesVideos never throws).
+      await enrichSeriesVideos(videos, tmdbId, key, fetchFn);
+      meta.videos = videos;
+    }
   }
   return meta;
+}
+
+// --- v1.2.2: episode enrichment ------------------------------------------
+// TMDB season detail: /tv/{tmdbId}/season/{n} -> { episodes: [
+//   { episode_number, name, still_path, overview, air_date } ] }.
+// One request per season, all in parallel, 2.5 s per-request timeout
+// (bounded total budget: the slowest season, not the sum). Results are
+// cached in-memory for 6 h — episode data is effectively static.
+// Fields added are all in the Stremio Video object type
+// (stremio-addon-sdk 1.6.10, docs/api/responses/meta.md):
+//   title (required), thumbnail (optional), overview (optional),
+//   released (ISO 8601 air date). Nothing invented: no name ->
+//   generic title kept; no still_path -> thumbnail omitted (never a
+//   placeholder); no overview/air_date -> field omitted. Video ids are
+//   never touched (streams depend on tt:S:E).
+const SEASON_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const seasonCache = new Map(); // `${tmdbId}:${season}` -> { at, episodes: Map<number, ep> }
+function clearSeasonCache() { seasonCache.clear(); }
+
+async function fetchSeasonEpisodes(tmdbId, seasonNumber, key, fetchFn) {
+  const cacheKey = `${tmdbId}:${seasonNumber}`;
+  const cached = seasonCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < SEASON_CACHE_TTL_MS) return cached.episodes;
+  try {
+    const url = `https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNumber}?api_key=${key}`;
+    const opts = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+      ? { signal: AbortSignal.timeout(2500) }
+      : undefined;
+    const res = await fetchFn(url, opts);
+    if (!res.ok) return null;
+    const d = await res.json();
+    const map = new Map();
+    for (const ep of d.episodes || []) {
+      if (ep && typeof ep.episode_number === 'number') map.set(ep.episode_number, ep);
+    }
+    seasonCache.set(cacheKey, { at: Date.now(), episodes: map });
+    return map;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function enrichSeriesVideos(videos, tmdbId, key, fetchFn) {
+  try {
+    const seasons = [...new Set(videos.map((v) => v.season))];
+    const results = await Promise.allSettled(
+      seasons.map((s) => fetchSeasonEpisodes(tmdbId, s, key, fetchFn))
+    );
+    const bySeason = new Map();
+    seasons.forEach((s, i) => {
+      if (results[i].status === 'fulfilled' && results[i].value) bySeason.set(s, results[i].value);
+    });
+    for (const v of videos) {
+      const ep = bySeason.get(v.season) && bySeason.get(v.season).get(v.episode);
+      if (!ep) continue;
+      if (typeof ep.name === 'string' && ep.name.trim()) v.title = ep.name;
+      if (typeof ep.still_path === 'string' && ep.still_path) {
+        v.thumbnail = `https://image.tmdb.org/t/p/w300${ep.still_path}`;
+      }
+      if (typeof ep.overview === 'string' && ep.overview.trim()) v.overview = ep.overview;
+      if (typeof ep.air_date === 'string' && ep.air_date) v.released = `${ep.air_date}T00:00:00.000Z`;
+    }
+  } catch (e) {
+    // Enrichment must never break meta: generic videos stand.
+  }
 }
 
 // Full resolution for one tt id. Fallback order:
@@ -163,4 +242,4 @@ async function fetchMetaFromCinemeta(imdbId, type, fetchFn) {
   return meta;
 }
 
-module.exports = { findTmdbId, fetchMetaForTmdbId, fetchMetaFromCinemeta, resolveMeta };
+module.exports = { findTmdbId, fetchMetaForTmdbId, fetchMetaFromCinemeta, resolveMeta, fetchSeasonEpisodes, enrichSeriesVideos, clearSeasonCache };

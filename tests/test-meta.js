@@ -17,7 +17,7 @@
 'use strict';
 
 const { buildMetaFromTmdb } = require('../app/lib/meta');
-const { findTmdbId, fetchMetaForTmdbId, fetchMetaFromCinemeta, resolveMeta } = require('../app/lib/meta-fetch');
+const { findTmdbId, fetchMetaForTmdbId, fetchMetaFromCinemeta, resolveMeta, clearSeasonCache } = require('../app/lib/meta-fetch');
 
 let fail = 0;
 const check = (ok, msg) => { console.log(`  ${ok ? '✓' : '✗ FAIL'} ${msg}`); if (!ok) fail++; };
@@ -416,6 +416,124 @@ console.log('=== 4. Live Cinemeta cross-check ===');
     eq(r.meta && r.meta.name, 'Preacher', 'Cinemeta-fallback meta name');
     eq(r.meta && r.meta.year, '2016', 'Cinemeta-fallback meta year');
     check(f.calls.some((u) => u.includes('/find/tt5016504')), 'Cinemeta path tried /find first (order kept)');
+  }
+
+  // -------------------------------------------------------------------------
+  // 6. v1.2.2: series episode enrichment from TMDB season details.
+  // Real episode names verified against TMDB (19 Nov 2026): Preacher
+  // S4E1 'Masada' (aired 2019-08-04), S4E2 'Last Supper', S4E3
+  // 'Deviant', S4E10 'End of the World' (2019-09-29); S1E1 'Pilot'.
+  // still_path values are SHAPE fixtures (same convention as the logo
+  // paths in §1–2); the asserted facts are name/thumbnail-URL shape/
+  // overview/released/ids. Live production check proves a real still
+  // loads (HTTP 200) for S4E1. NOTE: stub route order matters — the
+  // season routes MUST come before '/tv/64230', because the stub
+  // matches by substring and the season URL contains '/tv/64230'.
+  // -------------------------------------------------------------------------
+  console.log('=== 6. Episode enrichment (v1.2.2, stubbed seasons) ===');
+  const PREACHER_S4 = {
+    season_number: 4,
+    episodes: [
+      { episode_number: 1, name: 'Masada', still_path: '/preacher-s4e1.jpg', overview: 'Jesse is rocked by visions of an apocalyptic future as he and Tulip prepare for an all-out assault on Masada, where Cassidy - trapped to a torturous fate - struggles to hang on.', air_date: '2019-08-04' },
+      { episode_number: 2, name: 'Last Supper', still_path: '/preacher-s4e2.jpg', overview: 'God maneuvers the chess pieces of His apocalypse closer to the endgame.', air_date: '2019-08-04' },
+      { episode_number: 3, name: 'Deviant', still_path: null, overview: 'Tulip gets in too deep in Masada.', air_date: '2019-08-11' },
+      { episode_number: 10, name: 'End of the World', still_path: '/preacher-s4e10.jpg', overview: 'The curtain falls on the Apocalypse Revue.', air_date: '2019-09-29' },
+    ],
+  };
+  const PREACHER_S0 = {
+    season_number: 0,
+    episodes: [
+      { episode_number: 1, name: 'A Look at the Series', still_path: '/preacher-s0e1.jpg', overview: 'Behind the scenes.', air_date: '2016-05-23' },
+    ],
+  };
+  const PREACHER_S1 = {
+    season_number: 1,
+    episodes: [
+      { episode_number: 1, name: 'Pilot', still_path: '/preacher-s1e1.jpg', overview: 'Jesse struggles with his calling.', air_date: '2016-05-22' },
+      { episode_number: 2, name: '', still_path: '/preacher-s1e2.jpg', overview: '', air_date: '' },
+    ],
+  };
+
+  // 6a. Enriched Preacher: real names + thumbnails + overview + released.
+  {
+    clearSeasonCache();
+    const f = stubFetchFactory([
+      ['/tv/64230/season/4', PREACHER_S4],
+      ['/tv/64230/season/0', PREACHER_S0],
+      ['/tv/64230/season/1', PREACHER_S1],
+      ['/find/tt5016504', PREACHER_FIND],
+      ['/tv/64230', PREACHER_DETAIL],
+    ]);
+    const r = await resolveMeta('tt5016504', 'series', { key: KEY, fetchFn: f, tmdbIdForImdb: noMap });
+    eq(r.meta && r.meta.videos && r.meta.videos.length, 61, 'enriched Preacher still 61 videos');
+    const s4e1 = r.meta.videos.find((v) => v.id === 'tt5016504:4:1');
+    eq(s4e1 && s4e1.title, 'Masada', 'S4E1 title = real TMDB name "Masada" (not "Episode 1")');
+    eq(s4e1 && s4e1.thumbnail, 'https://image.tmdb.org/t/p/w300/preacher-s4e1.jpg', 'S4E1 thumbnail = TMDB w300 still');
+    check(typeof (s4e1 && s4e1.overview) === 'string' && s4e1.overview.startsWith('Jesse is rocked'), 'S4E1 overview from TMDB');
+    eq(s4e1 && s4e1.released, '2019-08-04T00:00:00.000Z', 'S4E1 released = air date as ISO');
+    eq(s4e1 && s4e1.season, 4, 'S4E1 season unchanged');
+    eq(s4e1 && s4e1.episode, 1, 'S4E1 episode unchanged');
+    const s4e2 = r.meta.videos.find((v) => v.id === 'tt5016504:4:2');
+    eq(s4e2 && s4e2.title, 'Last Supper', 'S4E2 title = "Last Supper"');
+    const s4e3 = r.meta.videos.find((v) => v.id === 'tt5016504:4:3');
+    eq(s4e3 && s4e3.title, 'Deviant', 'S4E3 title = "Deviant"');
+    eq(s4e3 && s4e3.thumbnail, undefined, 'S4E3 no still_path -> thumbnail omitted, never a placeholder');
+    eq(s4e3 && s4e3.released, '2019-08-11T00:00:00.000Z', 'S4E3 released present');
+    const s4e10 = r.meta.videos.find((v) => v.id === 'tt5016504:4:10');
+    eq(s4e10 && s4e10.title, 'End of the World', 'S4E10 title = "End of the World"');
+    const s0e1 = r.meta.videos.find((v) => v.id === 'tt5016504:0:1');
+    eq(s0e1 && s0e1.title, 'A Look at the Series', 'season-0 special enriched too (S0E1 real name)');
+    check(typeof (s0e1 && s0e1.thumbnail) === 'string', 'season-0 special gets a thumbnail');
+    const s1e1 = r.meta.videos.find((v) => v.id === 'tt5016504:1:1');
+    eq(s1e1 && s1e1.title, 'Pilot', 'S1E1 title = "Pilot"');
+    const s1e2 = r.meta.videos.find((v) => v.id === 'tt5016504:1:2');
+    eq(s1e2 && s1e2.title, 'Episode 2', 'episode with empty TMDB name keeps generic "Episode 2" (nothing invented)');
+    eq(s1e2 && s1e2.overview, undefined, 'episode with empty overview -> overview omitted');
+    eq(s1e2 && s1e2.released, undefined, 'episode with empty air_date -> released omitted');
+    const s2e1 = r.meta.videos.find((v) => v.id === 'tt5016504:2:1');
+    eq(s2e1 && s2e1.title, 'Episode 1', 'season with NO season fetch in stub (S2) keeps generic titles');
+    eq(s2e1 && s2e1.thumbnail, undefined, 'unfetched season -> no thumbnail');
+    check(f.calls.some((u) => u.includes('/tv/64230/season/4')), 'season detail endpoint called for S4');
+    check(r.meta.videos.every((v) => /^tt5016504:\d+:\d+$/.test(v.id)), 'all video ids still exactly tt:S:E');
+  }
+
+  // 6b. Fallback: every season fetch fails -> generic videos, meta intact.
+  {
+    clearSeasonCache();
+    const f = stubFetchFactory([
+      ['/find/tt5016504', PREACHER_FIND],
+      ['/tv/64230', PREACHER_DETAIL],
+    ]);
+    const r = await resolveMeta('tt5016504', 'series', { key: KEY, fetchFn: f, tmdbIdForImdb: noMap });
+    eq(r.meta && r.meta.name, 'Preacher', 'season-fetch failure: meta still returns');
+    eq(r.meta && r.meta.videos && r.meta.videos.length, 61, 'season-fetch failure: still 61 videos');
+    const s4e1 = r.meta.videos.find((v) => v.id === 'tt5016504:4:1');
+    eq(s4e1 && s4e1.title, 'Episode 1', 'season-fetch failure: S4E1 falls back to generic "Episode 1"');
+    eq(s4e1 && s4e1.thumbnail, undefined, 'season-fetch failure: no thumbnail');
+    check(r.meta.videos.every((v) => v.title === `Episode ${v.episode}`), 'season-fetch failure: ALL videos generic, none invented');
+  }
+
+  // 6c. Fallback: fetch itself throws on season URLs -> meta intact.
+  {
+    clearSeasonCache();
+    const f = async (url) => {
+      if (url.includes('/season/')) throw new Error('season down');
+      if (url.includes('/find/tt5016504')) return { ok: true, status: 200, json: async () => PREACHER_FIND };
+      if (url.includes('/tv/64230')) return { ok: true, status: 200, json: async () => PREACHER_DETAIL };
+      return { ok: false, status: 404, json: async () => ({}) };
+    };
+    const r = await resolveMeta('tt5016504', 'series', { key: KEY, fetchFn: f, tmdbIdForImdb: noMap });
+    eq(r.meta && r.meta.videos && r.meta.videos.length, 61, 'throwing season fetch: meta + 61 videos still returned');
+    eq(r.meta.videos.find((v) => v.id === 'tt5016504:4:1').title, 'Episode 1', 'throwing season fetch: generic title fallback');
+  }
+
+  // 6d. Movie meta untouched (no season calls, no videos key).
+  {
+    clearSeasonCache();
+    const f = stubFetchFactory([['/movie/490132', PADDINGTON_DETAIL]]);
+    const r = await resolveMeta('tt4468740', 'movie', { key: KEY, fetchFn: f, tmdbIdForImdb: noMap });
+    check(!('videos' in (r.meta || {})), 'movie meta still has no videos key');
+    check(!f.calls.some((u) => u.includes('/season/')), 'movie path makes zero season calls');
   }
 
   console.log(fail === 0 ? '\nALL META TESTS PASSED' : `\n${fail} META TEST(S) FAILED`);
