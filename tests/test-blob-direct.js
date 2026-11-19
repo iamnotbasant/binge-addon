@@ -119,6 +119,7 @@ async function withEnvAsync(patch, fn) {
     'lib/config.js',
     'lib/profiles.js',
     'lib/blob.js',
+    'lib/bundle.js',
     'index.js',
     'scripts/build-catalogs.js',
   ];

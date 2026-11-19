@@ -954,24 +954,48 @@ async function buildRows(type, key, idMap, stats, ctx) {
   return rows;
 }
 
-async function writeRowsToBlob(rows, idMap, token) {
+// v1.2.9: ONE put per rebuild — the whole catalog set (rows + idmap
+// + summary) goes into catalogs/_bundle.json (see lib/bundle.js).
+// The put is SKIPPED when the content hash matches yesterday's bundle,
+// so quiet days cost 0 Advanced requests. The legacy per-row files
+// are NOT written any more; they stay in Blob as a frozen read
+// fallback. A failed put writes nothing, so yesterday's bundle keeps
+// serving — the same invariant as the old per-row writes.
+async function writeBundle(rows, idMap, summary, builtAt, token) {
+  const { buildBundle, shouldSkipPut, readBundle, BUNDLE_KEY } = require('../lib/bundle');
   const { put } = require('@vercel/blob');
-  // Write the id map first, then rows; rows are only served after a
-  // successful write, so a mid-run failure leaves yesterday's files intact.
-  await put('catalogs/_idmap.json', JSON.stringify(idMap), {
+  const shapedRows = Object.fromEntries(
+    Object.entries(rows).map(([id, metas]) => [id, { metas, builtAt }])
+  );
+  const bundle = buildBundle({ rows: shapedRows, idmap: idMap, summary, builtAt });
+  let prev = null;
+  try {
+    prev = await readBundle();
+  } catch (e) {
+    console.log(`[build-catalogs] could not read previous bundle, writing anyway: ${e.message}`);
+  }
+  if (shouldSkipPut(prev, bundle.hash)) {
+    console.log(`[build-catalogs] bundle unchanged (hash ${bundle.hash.slice(0, 8)}), skipping put — 0 Advanced requests today`);
+    return { skipped: true, hash: bundle.hash };
+  }
+  await put(BUNDLE_KEY, JSON.stringify(bundle), {
     access: 'public', token, addRandomSuffix: false, allowOverwrite: true,
   });
-  for (const [rowId, metas] of Object.entries(rows)) {
-    await put(`catalogs/${rowId}.json`, JSON.stringify({ metas, builtAt: new Date().toISOString() }), {
-      access: 'public', token, addRandomSuffix: false, allowOverwrite: true,
-    });
-  }
+  return { skipped: false, hash: bundle.hash };
 }
 
-// v1.2.8: direct public-URL read (SIMPLE request) with list()
-// fallback inside readBlobJson — the builder's one read per run no
-// longer burns an ADVANCED request either.
+// v1.2.9: the idmap lives inside the bundle; the legacy _idmap.json
+// is the fallback (frozen since the v1.2.9 rebuild). Direct public-URL
+// reads (SIMPLE requests) — the builder's reads per run no longer burn
+// an ADVANCED request.
 async function readIdMap() {
+  try {
+    const { readBundle } = require('../lib/bundle');
+    const bundle = await readBundle();
+    if (bundle && bundle.idmap && typeof bundle.idmap === 'object') return bundle.idmap;
+  } catch (e) {
+    console.log(`[build-catalogs] could not read id map from bundle: ${e.message}`);
+  }
   try {
     const { readBlobJson } = require('../lib/blob');
     const json = await readBlobJson('catalogs/_idmap.json');
@@ -1014,35 +1038,27 @@ async function main() {
       rows[fullId] = metas;
     }
   }
-  await writeRowsToBlob(rows, idMap, token);
+  // v1.2.9: ONE builtAt for the whole run (shared by rows + summary)
+  // so identical content hashes identically and the skip-put check can
+  // fire. The bundle write is a single put (or zero, when unchanged).
+  const builtAt = new Date().toISOString();
   const summary = {
-    builtAt: new Date().toISOString(),
+    builtAt,
     catalogs: Object.fromEntries(
       Object.entries(rows).map(([id, metas]) => [
         id,
         {
           count: metas.length,
           top: metas.slice(0, 3).map((m) => m.name),
-          builtAt: new Date().toISOString(),
+          builtAt,
         },
       ])
     ),
   };
-  try {
-    const { put } = require('@vercel/blob');
-    await put('catalogs/_summary.json', JSON.stringify(summary), {
-      access: 'public',
-      token,
-      addRandomSuffix: false,
-      allowOverwrite: true,
-    });
-  } catch (err) {
-    console.error(`[build-catalogs] summary manifest write failed: ${err.message}`);
-    // Non-fatal: failed summary write must never abort or fail the catalog rebuild.
-  }
+  const bundleResult = await writeBundle(rows, idMap, summary, builtAt, token);
   const counts = Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, v.length]));
-  console.log(`[build-catalogs] done. rows=${JSON.stringify(counts)} excludedNoImdb=${stats.excludedNoImdb} excludedTvShow=${JSON.stringify(stats.excludedTvShow)} keywords=${JSON.stringify(stats.keywords)} idMapSize=${Object.keys(idMap).length}`);
-  return { skipped: false, counts, excludedNoImdb: stats.excludedNoImdb, excludedTvShow: stats.excludedTvShow, keywords: stats.keywords, trendingTopUp: stats.trendingTopUp };
+  console.log(`[build-catalogs] done. rows=${JSON.stringify(counts)} excludedNoImdb=${stats.excludedNoImdb} excludedTvShow=${JSON.stringify(stats.excludedTvShow)} keywords=${JSON.stringify(stats.keywords)} idMapSize=${Object.keys(idMap).length} bundleSkipped=${bundleResult.skipped} bundleHash=${bundleResult.hash.slice(0, 8)}`);
+  return { skipped: false, counts, excludedNoImdb: stats.excludedNoImdb, excludedTvShow: stats.excludedTvShow, keywords: stats.keywords, trendingTopUp: stats.trendingTopUp, bundleSkipped: bundleResult.skipped, bundleHash: bundleResult.hash };
 }
 
 if (require.main === module) {

@@ -29,7 +29,7 @@ const { readProfiles, writeProfiles, resolveProfile, createCustomProfile } = req
 
 const STREAM_CAP = 40;
 const ADDON_NAME = 'binge-addon';
-const VERSION = '1.2.8';
+const VERSION = '1.2.9';
 
 const builder = new addonBuilder(MANIFEST);
 
@@ -325,24 +325,35 @@ app.get('/admin/api/status', requireAdmin, async (req, res) => {
     const catalogs = [];
     let lastBuiltAt = null;
 
-    // Primary: fetch lightweight summary manifest catalogs/_summary.json bypassing 5-min store cache
-    // v1.0.9: in-memory cache, 60s TTL — the list()+fetch on every status
-    // call was ~0.87s of the warm ~1.45s latency. Fallback branch untouched.
-    // v1.2.8: direct public-URL read (SIMPLE request) with list()
-    // fallback inside readBlobJson — no ADVANCED request per status call.
+    // Primary: the bundle's embedded summary (v1.2.9 — the rebuild
+    // writes _summary.json no more; it lives inside _bundle.json).
+    // Then the legacy _summary.json (frozen since the v1.2.9 rebuild),
+    // then the per-row fallback below. All reads are SIMPLE requests.
     let summary = null;
     if (summaryCache.data && Date.now() - summaryCache.at < 60 * 1000) {
       summary = summaryCache.data;
     } else {
       try {
-        const { readBlobJson } = require('./lib/blob');
-        const json = await readBlobJson('catalogs/_summary.json');
-        if (json) {
-          summary = json;
+        const { readBundle } = require('./lib/bundle');
+        const bundle = await readBundle();
+        if (bundle && bundle.summary && bundle.summary.catalogs) {
+          summary = bundle.summary;
           summaryCache = { at: Date.now(), data: summary };
         }
       } catch (err) {
-        console.log(`[binge-addon] summary manifest read error: ${err.message}`);
+        console.log(`[binge-addon] bundle summary read error: ${err.message}`);
+      }
+      if (!summary) {
+        try {
+          const { readBlobJson } = require('./lib/blob');
+          const json = await readBlobJson('catalogs/_summary.json');
+          if (json) {
+            summary = json;
+            summaryCache = { at: Date.now(), data: summary };
+          }
+        } catch (err) {
+          console.log(`[binge-addon] summary manifest read error: ${err.message}`);
+        }
       }
     }
 

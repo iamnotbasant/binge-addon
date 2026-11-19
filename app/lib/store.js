@@ -10,6 +10,12 @@
 // need BLOB_READ_WRITE_TOKEN and no longer burn an ADVANCED request
 // per catalog; without the store (direct 404 + no token for list())
 // the handler returns null and the caller serves { metas: [] }.
+//
+// v1.2.9: reads go through the SINGLE BUNDLE first
+// (catalogs/_bundle.json — all rows + idmap + summary in one file, see
+// lib/bundle.js). The legacy per-row files are the fallback only: they
+// are no longer written by the rebuild, but they stay in Blob as a
+// frozen safety net, so a missing/wrong bundle can never break reads.
 
 'use strict';
 
@@ -24,9 +30,23 @@ async function readCatalogFile(catalogId) {
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value;
 
-  // v1.2.8: direct public-URL read (SIMPLE request) with list()
-  // fallback inside readBlobJson — no BLOB_READ_WRITE_TOKEN needed
-  // for the direct path, and no list() burned per catalog load.
+  // v1.2.9: bundle first (one SIMPLE request for all rows), legacy
+  // per-row file as fallback — the legacy files are frozen since the
+  // v1.2.9 rebuild, but they still serve yesterday's rows if the
+  // bundle is ever missing.
+  try {
+    const { readBundle } = require('./bundle');
+    const bundle = await readBundle();
+    const row = bundle && bundle.rows && bundle.rows[catalogId];
+    if (row && Array.isArray(row.metas)) {
+      const value = { metas: row.metas, builtAt: row.builtAt || bundle.builtAt || null };
+      cache.set(key, { at: Date.now(), value });
+      return value;
+    }
+  } catch (e) {
+    console.log(`[binge-addon] bundle row read failed for ${catalogId}: ${e.message}`);
+  }
+  // Legacy fallback: the frozen per-row file (v1.2.8 direct path).
   try {
     const { readBlobJson } = require('./blob');
     const json = await readBlobJson(key);
@@ -54,8 +74,18 @@ async function readCatalogMeta(catalogId) {
 let idMapCache = null; // { at, value }
 async function readIdMap() {
   if (idMapCache && Date.now() - idMapCache.at < CACHE_TTL_MS) return idMapCache.value;
-  // v1.2.8: direct public-URL read (SIMPLE request) with list()
-  // fallback inside readBlobJson.
+  // v1.2.9: idmap lives inside the bundle; legacy _idmap.json is the
+  // fallback (frozen since the v1.2.9 rebuild).
+  try {
+    const { readBundle } = require('./bundle');
+    const bundle = await readBundle();
+    if (bundle && bundle.idmap && typeof bundle.idmap === 'object') {
+      idMapCache = { at: Date.now(), value: bundle.idmap };
+      return bundle.idmap;
+    }
+  } catch (e) {
+    console.log(`[binge-addon] bundle idmap read failed: ${e.message}`);
+  }
   try {
     const { readBlobJson } = require('./blob');
     const json = await readBlobJson('catalogs/_idmap.json');
@@ -68,4 +98,11 @@ async function readIdMap() {
   }
 }
 
-module.exports = { readCatalog, readCatalogMeta, readIdMap, PREFIX };
+module.exports = { readCatalog, readCatalogMeta, readIdMap, PREFIX, invalidateStoreCache };
+
+// Test/support hook: clear the row + idmap caches (e.g. after a
+// rebuild, or between fixture servers in tests).
+function invalidateStoreCache() {
+  cache.clear();
+  idMapCache = null;
+}

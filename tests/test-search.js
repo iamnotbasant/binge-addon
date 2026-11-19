@@ -170,7 +170,7 @@ function stubFetchFactory(searchResults, imdbMap, failIds = []) {
   // ---------------------------------------------------------------------------
   console.log('=== 3. Manifest (search extra) ===');
   {
-    eq(MANIFEST.version, '1.2.8', 'manifest version 1.2.8');
+    eq(MANIFEST.version, '1.2.9', 'manifest version 1.2.9');
     eq(catalogs().length, 27, '27 catalogs');
     check(catalogs().every((c) => Array.isArray(c.extra) && c.extra.length === 1
       && c.extra[0].name === 'search' && c.extra[0].isRequired === false),
@@ -193,8 +193,8 @@ function stubFetchFactory(searchResults, imdbMap, failIds = []) {
   try {
     const hRes = await fetch(`${BASE}/health`);
     const health = await hRes.json();
-    if (health.version !== '1.2.8') {
-      console.log(`  ⊘ SKIP live search checks — production is still ${health.version} (deploy 1.2.8 first)`);
+    if (health.version !== '1.2.9') {
+      console.log(`  ⊘ SKIP live search checks — production is still ${health.version} (deploy 1.2.9 first)`);
     } else {
       const getMetas = async (path) => {
         const r = await fetch(`${BASE}${path}`);

@@ -15,8 +15,10 @@
 //   https://<store-host>.public.blob.vercel-storage.com/<pathname>
 // A plain GET of a public Blob URL is a SIMPLE request, not an
 // advanced one, so reads stop burning the 2,000/month allowance.
-// Remaining burn after this change is ~29 puts/day (daily rebuild:
-// 27 rows + idmap + summary) plus rare lists.
+// v1.2.9: the remaining burn is now ~1 put/day (the daily rebuild
+// writes ONE bundle file, catalogs/_bundle.json — see lib/bundle.js),
+// 0 on days the bundle content is unchanged (hash-skip). The old
+// ~29 puts/day (27 rows + idmap + summary) are gone.
 //
 // The store host is VERIFIED, not assumed: on 19 Nov 2026
 //   https://drqjSj6Uy2iBuItV.public.blob.vercel-storage.com/catalogs/trending-indian-movie.json
