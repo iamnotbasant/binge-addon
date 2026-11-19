@@ -37,6 +37,13 @@ const CONCURRENCY = 10;
 // Indian original languages, reused by the Trending Indian filter.
 const INDIAN_LANGS = ['hi', 'te', 'ta', 'ml', 'kn', 'bn', 'mr', 'gu', 'pa'];
 
+// v1.3.1: Indian-origin check for the New Releases split — origin
+// country IN, or an Indian original language (covers titles whose
+// origin_country is missing/odd on TMDB).
+function isIndianTitle(item) {
+  return ((item.origin_country || []).includes('IN')) || INDIAN_LANGS.includes(item.original_language);
+}
+
 // --- TMDB genre ids (stable, per TMDB docs) ---
 // Movies: Sci-Fi 878, Adventure 12, Fantasy 14, Action 28, Crime 80,
 // Thriller 53, Mystery 9648.
@@ -60,8 +67,6 @@ const THEATRES_MIN_VOTES = 10;      // #10 vote_count floor (v2.0.1: was 1000 �
 // Jailer 2 40. Probed 18 Nov 2026: now_playing IN 5 pages, >=1000: 0
 // pass, >=100: 5, >=50: 7, >=10: 13. Floor 10 keeps the real
 // in-theatre titles and drops the 0-vote noise.)
-const SOUTH_YEARS = 2;              // #11 South Indian Blockbusters: last 2 years
-const SOUTH_MIN_VOTE = 7;           // #11 vote_average floor
 const UNDER_MIN_VOTE = 7.8;         // #13 Underrated Gems: vote_average floor
 const UNDER_MIN_VOTES = 2000;       // #13 vote_count floor (low end)
 const UNDER_MAX_VOTES = 25000;      // #13 vote_count ceiling (the "underrated" band)
@@ -104,6 +109,26 @@ const CLASSICS_MIN_VOTES = 10000;   // #25 vote_count floor (v2.0.1: TMDB
 // 30 pass in 3 pages. Released-only alone does NOT fix it (all 60
 // have past dates).)
 const DARK_CRIME_MIN_VOTE = 7.2;    // #12 Dark Crime series: vote_average floor
+const NEW_REL_DAYS = 45;            // v1.3.0 New Releases: released in last 45d
+const NEW_REL_MIN_VOTE = 6.5;       // v1.3.1 vote_average floor ("badiya")
+const NEW_REL_MIN_VOTES = 100;      // v1.3.1 vote_count floor ("badiya", worldwide)
+const NEW_REL_MIN_VOTES_INDIAN = 10; // v1.3.1 Indian-pass vote_count floor —
+// Indian titles on TMDB have very few votes (Ramayana 57, Jailer 2 40
+// on 18 Nov 2026), so the 100 floor emptied the Indian pool entirely
+// (first v1.3.1 rebuild: indian 0/0). Theatres-row precedent (v2.0.1):
+// floor 10 for Indian titles. vote_average stays 6.5 in both passes.
+const NEW_REL_MIN_VOTES_SERIES = 25; // v1.3.1 worldwide-SERIES vote_count
+// floor — new series accumulate TMDB votes slower than movies; the 100
+// floor left only 8 series worldwide (second v1.3.1 rebuild). Movies
+// stay at 100 (their row fills 20/20 there). vote_average stays 6.5.
+const NEW_REL_INDIAN_TARGET = 10;   // v1.3.1 reserved Indian slots per row
+
+// v1.3.1: legacy per-row Blob files for REMOVED catalogs. The bundle no
+// longer carries them, but readCatalogFile falls back to the frozen
+// legacy file, so a removed row keeps serving stale data until its
+// legacy file is deleted. The rebuild prunes these (one del, only when
+// the file still exists — checked with a free HEAD first).
+const REMOVED_LEGACY_ROWS = ['south-blockbusters-movie'];
 
 // Detail-heavy rows (#3, #4, #7, #9) cap the number of detail calls:
 // 3 discover pages x 20 items = 60 candidates max per row. The cap is
@@ -449,8 +474,6 @@ async function buildRows(type, key, idMap, stats, ctx) {
   const newSeriesDays = K('newly-announced-series', 'windowDays', NEW_SERIES_ANNOUNCE_DAYS);
   const retDays = K('returning-soon', 'windowDays', RETURNING_DAYS);
   const theatreVotes = K('now-in-theatres', 'voteCountFloor', THEATRES_MIN_VOTES);
-  const southDays = K('south-blockbusters', 'windowDays', SOUTH_YEARS * 365);
-  const southVote = K('south-blockbusters', 'voteFloor', SOUTH_MIN_VOTE);
   const underVote = K('underrated-gems', 'voteFloor', UNDER_MIN_VOTE);
   const underMinVotes = K('underrated-gems', 'voteCountFloor', UNDER_MIN_VOTES);
   const underMaxVotes = K('underrated-gems', 'voteCountCeil', UNDER_MAX_VOTES);
@@ -468,6 +491,11 @@ async function buildRows(type, key, idMap, stats, ctx) {
   const animeVotes = K('action-anime', 'voteCountFloor', ANIME_MIN_VOTES);
   const classicVotes = K('all-time-classics', 'voteCountFloor', CLASSICS_MIN_VOTES);
   const darkVote = K('dark-crime', 'voteFloor', DARK_CRIME_MIN_VOTE);
+  const newRelDays = K('new-releases', 'windowDays', NEW_REL_DAYS);
+  const newRelVote = K('new-releases', 'voteFloor', NEW_REL_MIN_VOTE);
+  const newRelVotes = K('new-releases', 'voteCountFloor', NEW_REL_MIN_VOTES);
+  const newRelVotesIndian = K('new-releases', 'voteCountFloorIndian', NEW_REL_MIN_VOTES_INDIAN);
+  const newRelVotesSeries = K('new-releases', 'voteCountFloorSeries', NEW_REL_MIN_VOTES_SERIES);
   const rows = {};
   const seriesCache = ctx.seriesCache;
   const movieCache = ctx.movieCache;
@@ -559,6 +587,71 @@ async function buildRows(type, key, idMap, stats, ctx) {
   stats.trendingTopUp = stats.trendingTopUp || {};
   stats.trendingTopUp[type] = trendMetas.length - trendBefore;
   rows['trending-indian'] = trendMetas;
+
+  // --- v1.3.1: New Releases — India + Worldwide (both types) ---
+  // Released in the last 45 days, vote_average>=6.5 ("badiya"), sorted
+  // newest-first. India + worldwide mixed: up to 10 Indian-origin
+  // titles and up to 10 worldwide titles, merged by release date desc,
+  // so Indian titles are never crowded out by the global pool. If
+  // either pool is thin, the other fills the row to 20 (counts in
+  // stats). vote_count floor is SPLIT: worldwide movies 100, worldwide
+  // series 25, Indian 10 — Indian titles on TMDB have very few votes
+  // (Ramayana 57, Jailer 2 40), so the 100 floor emptied the Indian
+  // pool (first v1.3.1 rebuild: indian 0/0); new series accumulate
+  // votes slower than movies, so the 100 floor left only 8 series
+  // worldwide (second rebuild).
+  const newRelFrom = isoDate(daysFromNow(-newRelDays));
+  const newRelDateField = isMovie ? 'primary_release_date' : 'first_air_date';
+  const newRelKept = [];
+  const newRelSeen = new Set();
+  async function newRelPass(wantIndian, target) {
+    const got = [];
+    for (let p = 1; p <= 3 && got.length < target; p++) {
+      const page = await tmdb(path, key, {
+        sort_by: `${newRelDateField}.desc`,
+        ...(wantIndian ? { with_origin_country: 'IN' } : {}),
+        'vote_average.gte': newRelVote,
+        'vote_count.gte': wantIndian ? newRelVotesIndian : (isMovie ? newRelVotes : newRelVotesSeries),
+        [`${newRelDateField}.lte`]: todayStr,
+        [`${newRelDateField}.gte`]: newRelFrom,
+        page: p,
+      });
+      const fresh = (page.results || []).filter((it) => !newRelSeen.has(it.id));
+      if (!fresh.length) continue;
+      const made = await mapLimit(fresh, CONCURRENCY, async (item) => {
+        if (!wantIndian && isIndianTitle(item)) return null;
+        if (isMovie) {
+          const imdbId = await resolveImdb(type, item.id, key, idMap);
+          if (!imdbId) { stats.excludedNoImdb++; return null; }
+          return { meta: toMeta(item, type, imdbId), date: (item.release_date || '').slice(0, 10), indian: wantIndian };
+        }
+        const meta = await seriesMeta(item, key, idMap, seriesCache, stats);
+        if (!meta) return null;
+        return { meta, date: (item.first_air_date || '').slice(0, 10), indian: wantIndian };
+      });
+      for (let i = 0; i < fresh.length; i++) {
+        newRelSeen.add(fresh[i].id);
+        if (got.length >= target) break;
+        if (made[i]) got.push(made[i]);
+      }
+    }
+    return got;
+  }
+  const newRelIndian = await newRelPass(true, NEW_REL_INDIAN_TARGET);
+  const newRelGlobal = await newRelPass(false, ROW_CAP - newRelIndian.length);
+  const newRelMerged = [...newRelIndian, ...newRelGlobal]
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const newRelSliced = newRelMerged.slice(0, ROW_CAP);
+  stats.newReleases = stats.newReleases || {};
+  stats.newReleases[type] = {
+    total: newRelSliced.length,
+    indian: newRelSliced.filter((x) => x.indian).length,
+    worldwide: newRelSliced.filter((x) => !x.indian).length,
+    newest: newRelSliced.length ? newRelSliced[0].date : null,
+    oldest: newRelSliced.length ? newRelSliced[newRelSliced.length - 1].date : null,
+    windowDays: newRelDays,
+  };
+  rows['new-releases'] = newRelSliced.map((x) => x.meta);
 
   // --- #2 Trending Worldwide: TMDB /trending/{type}/week, NO Indian
   // filter (v1.2 logic, reused) — the week's worldwide hits. Scan up
@@ -663,17 +756,6 @@ async function buildRows(type, key, idMap, stats, ctx) {
       }
     }
     rows['now-in-theatres'] = theatreMetas;
-
-    // --- #11 South Indian Blockbusters (movie): languages te/ta/ml
-    // (ONE combined row, not per-language), vote_average>=7, last 2
-    // years, sort popularity.desc.
-    rows['south-blockbusters'] = await collectDiscoverRow('/discover/movie', {
-      sort_by: 'popularity.desc',
-      with_original_language: 'te|ta|ml',
-      'vote_average.gte': southVote,
-      'primary_release_date.lte': todayStr,
-      'primary_release_date.gte': isoDate(daysFromNow(-southDays)),
-    }, ROW_CAP, 2, type, key, idMap, movieCache, stats);
 
     // --- #21 Adrenaline Action, Heist & Revenge (movie): genres
     // Action/Crime, vote_average>=7, vote_count>=25000, sort
@@ -1056,9 +1138,38 @@ async function main() {
     ),
   };
   const bundleResult = await writeBundle(rows, idMap, summary, builtAt, token);
+  // v1.3.1: prune legacy per-row files for removed catalogs (see
+  // REMOVED_LEGACY_ROWS). Runs even when the bundle put is skipped —
+  // the legacy file is stale either way. HEAD first (SIMPLE request);
+  // del only when the file exists, so quiet days cost 0 Advanced
+  // requests. Errors are swallowed: a stale legacy file is a cosmetic
+  // leftover, never a rebuild failure.
+  const prunedLegacy = [];
+  try {
+    const { del } = require('@vercel/blob');
+    const { publicBaseUrl } = require('../lib/blob');
+    for (const rowId of REMOVED_LEGACY_ROWS) {
+      const pathname = `catalogs/${rowId}.json`;
+      let exists = false;
+      try {
+        const head = await fetch(`${publicBaseUrl()}/${pathname}`, { method: 'HEAD' });
+        exists = head.status !== 404;
+      } catch (e) { exists = false; }
+      if (!exists) continue;
+      try {
+        await del(`${publicBaseUrl()}/${pathname}`, { token });
+        prunedLegacy.push(rowId);
+        console.log(`[build-catalogs] pruned legacy row file ${pathname}`);
+      } catch (e) {
+        console.log(`[build-catalogs] legacy prune failed for ${pathname}: ${e.message}`);
+      }
+    }
+  } catch (e) {
+    console.log(`[build-catalogs] legacy prune unavailable: ${e.message}`);
+  }
   const counts = Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, v.length]));
-  console.log(`[build-catalogs] done. rows=${JSON.stringify(counts)} excludedNoImdb=${stats.excludedNoImdb} excludedTvShow=${JSON.stringify(stats.excludedTvShow)} keywords=${JSON.stringify(stats.keywords)} idMapSize=${Object.keys(idMap).length} bundleSkipped=${bundleResult.skipped} bundleHash=${bundleResult.hash.slice(0, 8)}`);
-  return { skipped: false, counts, excludedNoImdb: stats.excludedNoImdb, excludedTvShow: stats.excludedTvShow, keywords: stats.keywords, trendingTopUp: stats.trendingTopUp, bundleSkipped: bundleResult.skipped, bundleHash: bundleResult.hash };
+  console.log(`[build-catalogs] done. rows=${JSON.stringify(counts)} excludedNoImdb=${stats.excludedNoImdb} excludedTvShow=${JSON.stringify(stats.excludedTvShow)} keywords=${JSON.stringify(stats.keywords)} idMapSize=${Object.keys(idMap).length} bundleSkipped=${bundleResult.skipped} bundleHash=${bundleResult.hash.slice(0, 8)} prunedLegacy=${JSON.stringify(prunedLegacy)}`);
+  return { skipped: false, counts, excludedNoImdb: stats.excludedNoImdb, excludedTvShow: stats.excludedTvShow, keywords: stats.keywords, trendingTopUp: stats.trendingTopUp, newReleases: stats.newReleases, bundleSkipped: bundleResult.skipped, bundleHash: bundleResult.hash, prunedLegacy };
 }
 
 if (require.main === module) {
@@ -1068,4 +1179,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main };
+module.exports = { main, buildRows, isIndianTitle };

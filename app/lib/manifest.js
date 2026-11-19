@@ -22,6 +22,9 @@ function catalogs() {
   // #1 Trending in India
   push('trending-indian-movie', 'Trending in India', 'movie');
   push('trending-indian-series', 'Trending in India', 'series');
+  // #1b New Releases — India + Worldwide (v1.3.1, basant 19 Nov 2026)
+  push('new-releases-movie', 'New Releases — India + Worldwide', 'movie');
+  push('new-releases-series', 'New Releases — India + Worldwide', 'series');
   // #2 Trending Worldwide
   push('global-trending-movie', 'Trending Worldwide', 'movie');
   push('global-trending-series', 'Trending Worldwide', 'series');
@@ -43,8 +46,6 @@ function catalogs() {
   push('returning-soon-series', 'New Season Returning Soon', 'series');
   // #10 Now in Theatres (movie only)
   push('now-in-theatres-movie', 'Now in Theatres', 'movie');
-  // #11 South Indian Blockbusters (movie only)
-  push('south-blockbusters-movie', 'South Indian Blockbusters', 'movie');
   // #12 Indian Dark Crime & Thrillers (series only)
   push('dark-crime-series', 'Indian Dark Crime & Thrillers', 'series');
   // #13 Underrated Indian Gems
@@ -71,10 +72,10 @@ function catalogs() {
 
 const MANIFEST = {
   id: 'com.bharatstreams',
-  version: '1.2.9',
+  version: '1.3.1',
   name: 'Binge Addon',
   description:
-    'Free Hindi-first Indian catalogs and streams. Trending India + Worldwide, Fresh Digital Drops, Latest Indian Movies & Web Series, Releasing Next 30 Days, Big Announcements 2026–2027, Now in Theatres, South Blockbusters, Dark Crime, Underrated Gems, Sci-Fi & Time Travel, Thrillers, Action, Mini-Series, Visual Spectacles, Anime and All-Time Classics, with Hindi 1080p streams first. This product uses the TMDB API but is not endorsed or certified by TMDB.',
+    'Free Hindi-first Indian catalogs and streams. Trending India + Worldwide, New Releases — India + Worldwide, Fresh Digital Drops, Latest Indian Movies & Web Series, Releasing Next 30 Days, Big Announcements 2026–2027, Now in Theatres, Dark Crime, Underrated Gems, Sci-Fi & Time Travel, Thrillers, Action, Mini-Series, Visual Spectacles, Anime and All-Time Classics, with Hindi 1080p streams first. This product uses the TMDB API but is not endorsed or certified by TMDB.',
   resources: [
     'catalog',
     { name: 'meta', types: ['movie', 'series'], idPrefixes: ['tt'] },
