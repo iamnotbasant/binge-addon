@@ -17,6 +17,7 @@
 'use strict';
 
 const { buildMetaFromTmdb } = require('../app/lib/meta');
+const { findTmdbId, fetchMetaForTmdbId, fetchMetaFromCinemeta, resolveMeta } = require('../app/lib/meta-fetch');
 
 let fail = 0;
 const check = (ok, msg) => { console.log(`  ${ok ? '✓' : '✗ FAIL'} ${msg}`); if (!ok) fail++; };
@@ -55,6 +56,154 @@ const JAILER2 = {
   },
   images: { logos: [{ file_path: '/jailer2-en.png', iso_639_1: 'en' }] },
 };
+
+// ---------------------------------------------------------------------------
+// v1.1.9 / v1.2.0 fixtures: TMDB /find + Cinemeta fallback shapes.
+// Real values verified live 19 Nov 2026 (TMDB pages + Cinemeta):
+//   Preacher (tt5016504) — TMDB tv 64230, first aired 2016-05-22,
+//     43 episodes S1 10 / S2 13 / S3 10 / S4 10; cast Dominic Cooper,
+//     Joe Gilgun, Ruth Negga; Cinemeta year range '2016–2019'.
+//   Paddington 2 (tt4468740) — released 2017-11-10 (UK), runtime
+//     104 min, director Paul King, genres Adventure/Comedy/Family.
+//   poster/backdrop/logo file_paths + episode_run_time below are SHAPE
+//   fixtures (same convention as the logo paths in §1–2); the asserted
+//   facts are name/year/poster/videos/director. The Paddington 2 TMDB
+//   id in the stub is a scripted value — the test asserts the meta, not
+//   the id; the live production check proves the real /find resolution.
+// ---------------------------------------------------------------------------
+const PREACHER_FIND = {
+  movie_results: [],
+  person_results: [],
+  tv_results: [{ id: 64230, name: 'Preacher', first_air_date: '2016-05-22' }],
+  tv_episode_results: [],
+  tv_season_results: [],
+};
+
+const PREACHER_DETAIL = {
+  name: 'Preacher',
+  first_air_date: '2016-05-22',
+  episode_run_time: [45],
+  poster_path: '/preacher-poster.jpg',
+  backdrop_path: '/preacher-backdrop.jpg',
+  overview: 'A preacher sets out on a mission to make the almighty himself confess his sin of abandoning the world.',
+  genres: [{ name: 'Adventure' }, { name: 'Comedy' }, { name: 'Fantasy' }],
+  credits: {
+    cast: ['Dominic Cooper', 'Joe Gilgun', 'Ruth Negga'].map((name) => ({ name })),
+    crew: [],
+  },
+  images: { logos: [{ file_path: '/preacher-logo.png', iso_639_1: 'en' }] },
+  // TMDB lists a season 0 (Specials, 18 eps) on top of the 43 episodes
+  // (S1 10 / S2 13 / S3 10 / S4 10) — verified live 19 Nov 2026: the
+  // production meta carries 61 videos, first tt5016504:0:1.
+  seasons: [
+    { season_number: 0, episode_count: 18 },
+    { season_number: 1, episode_count: 10 },
+    { season_number: 2, episode_count: 13 },
+    { season_number: 3, episode_count: 10 },
+    { season_number: 4, episode_count: 10 },
+  ],
+};
+
+const PADDINGTON_FIND = {
+  movie_results: [{ id: 490132, title: 'Paddington 2', release_date: '2017-11-10' }],
+  person_results: [],
+  tv_results: [],
+  tv_episode_results: [],
+  tv_season_results: [],
+};
+
+const PADDINGTON_DETAIL = {
+  title: 'Paddington 2',
+  release_date: '2017-11-10',
+  runtime: 104,
+  poster_path: '/paddington2-poster.jpg',
+  backdrop_path: '/paddington2-backdrop.jpg',
+  overview: 'Paddington, now happily settled with the Brown family, picks up a series of odd jobs to buy the perfect present for his Aunt Lucy\'s 100th birthday.',
+  genres: [{ name: 'Adventure' }, { name: 'Comedy' }, { name: 'Family' }],
+  credits: {
+    cast: ['Ben Whishaw', 'Hugh Grant', 'Hugh Bonneville'].map((name) => ({ name })),
+    crew: [{ job: 'Director', name: 'Paul King' }],
+  },
+  images: { logos: [{ file_path: '/paddington2-logo.png', iso_639_1: 'en' }] },
+};
+
+const FIND_EMPTY = {
+  movie_results: [],
+  person_results: [],
+  tv_results: [],
+  tv_episode_results: [],
+  tv_season_results: [],
+};
+
+// Real Cinemeta payloads (subset), fetched live 19 Nov 2026.
+const CINEMETA_PREACHER = {
+  meta: {
+    id: 'tt5016504',
+    type: 'series',
+    name: 'Preacher',
+    poster: 'https://images.metahub.space/poster/small/tt5016504/img',
+    background: 'https://images.metahub.space/background/medium/tt5016504/img',
+    logo: 'https://images.metahub.space/logo/medium/tt5016504/img',
+    description: 'After a supernatural event at his church, a preacher enlists the help of a vampire and his ex to find God.',
+    releaseInfo: '2016–2019',
+    released: '2016-05-22T00:00:00.000Z',
+    year: '2016–2019',
+    genres: ['Adventure', 'Comedy', 'Fantasy'],
+    genre: ['Adventure', 'Comedy', 'Fantasy'],
+    cast: ['Dominic Cooper', 'Joe Gilgun', 'Ruth Negga'],
+    director: null,
+    runtime: '45 min',
+    imdbRating: '7.9',
+    moviedb_id: 64230,
+    videos: [
+      { id: 'tt5016504:0:1', name: 'A Look at the Series', season: 0, episode: 1, released: '2016-05-23T06:00:00.000Z', firstAired: '2016-05-23T06:00:00.000Z', thumbnail: 'https://episodes.metahub.space/tt5016504/0/1/w780.jpg', overview: 'Behind the scenes.' },
+      { id: 'tt5016504:1:1', name: 'Pilot', season: 1, episode: 1, released: '2016-05-22T06:00:00.000Z', firstAired: '2016-05-22T06:00:00.000Z', thumbnail: 'https://episodes.metahub.space/tt5016504/1/1/w780.jpg', overview: 'Jesse struggles.' },
+      { id: 'tt5016504:4:10', name: 'Masada', season: 4, episode: 10, released: '2019-08-04T06:00:00.000Z', firstAired: '2019-08-04T06:00:00.000Z', thumbnail: 'https://episodes.metahub.space/tt5016504/4/10/w780.jpg', overview: 'The fate of the world is decided.' },
+    ],
+  },
+};
+
+const CINEMETA_PADDINGTION = {
+  meta: {
+    id: 'tt4468740',
+    type: 'movie',
+    name: 'Paddington 2',
+    poster: 'https://images.metahub.space/poster/small/tt4468740/img',
+    background: 'https://images.metahub.space/background/medium/tt4468740/img',
+    logo: 'https://images.metahub.space/logo/medium/tt4468740/img',
+    description: 'Paddington, now happily settled with the Brown family, picks up a series of odd jobs.',
+    releaseInfo: '2018',
+    released: '2018-01-12T00:00:00.000Z',
+    year: '2018',
+    genres: ['Adventure', 'Comedy', 'Family'],
+    genre: ['Adventure', 'Comedy', 'Family'],
+    cast: ['Ben Whishaw', 'Hugh Grant', 'Hugh Bonneville'],
+    director: ['Paul King'],
+    runtime: '104 min',
+    imdbRating: '7.8',
+  },
+};
+
+// Stub fetch: routes are [urlSubstring, jsonBody | {status, json}].
+// Records every URL fetched so tests can prove which path was taken.
+function stubFetchFactory(routes) {
+  const calls = [];
+  const fn = async (url) => {
+    calls.push(url);
+    for (const [sub, resp] of routes) {
+      if (url.includes(sub)) {
+        if (resp && typeof resp === 'object' && 'status' in resp) {
+          return { ok: resp.status >= 200 && resp.status < 300, status: resp.status, json: async () => resp.json };
+        }
+        return { ok: true, status: 200, json: async () => resp };
+      }
+    }
+    return { ok: false, status: 404, json: async () => ({}) };
+  };
+  fn.calls = calls;
+  return fn;
+}
+const KEY = 'TESTKEY';
 
 // ---------------------------------------------------------------------------
 // 1. Ramayana — logo (English preferred), year, cast, unchanged fields
@@ -139,6 +288,136 @@ console.log('=== 4. Live Cinemeta cross-check ===');
       check(false, `live Cinemeta check failed for ${name}: ${e.message}`);
     }
   }
+
+  // -------------------------------------------------------------------------
+  // 5. v1.1.9 + v1.2.0 fallback chain (stubbed TMDB + Cinemeta, offline)
+  // -------------------------------------------------------------------------
+  console.log('=== 5. Fallback chain (stubbed) ===');
+  const noMap = async () => null;
+  const mapRamayana = async () => '12345';
+
+  // 5a. Preacher (series, NOT in catalogs) via TMDB /find.
+  {
+    const f = stubFetchFactory([
+      ['/find/tt5016504', PREACHER_FIND],
+      ['/tv/64230', PREACHER_DETAIL],
+      ['v3-cinemeta.strem.io/meta/series/tt5016504', CINEMETA_PREACHER],
+    ]);
+    const r = await resolveMeta('tt5016504', 'series', { key: KEY, fetchFn: f, tmdbIdForImdb: noMap });
+    eq(r.via, 'find', 'Preacher resolves via TMDB /find (not the map)');
+    eq(r.tmdbId, 64230, 'Preacher /find returns the real TMDB tv id 64230');
+    eq(r.meta && r.meta.name, 'Preacher', 'Preacher meta name');
+    eq(r.meta && r.meta.year, '2016', 'Preacher meta year 2016');
+    check(typeof (r.meta && r.meta.poster) === 'string' && r.meta.poster.startsWith('https://image.tmdb.org/t/p/w342/'),
+      'Preacher meta poster present (TMDB w342)');
+    check(!!(r.meta && r.meta.logo), 'Preacher meta logo present');
+    eq(r.meta && r.meta.videos && r.meta.videos.length, 61, 'Preacher meta videos = 61 (season 0 specials 18 + episodes 43)');
+    eq(r.meta && r.meta.videos && r.meta.videos[0].id, 'tt5016504:0:1', 'Preacher first video id tt5016504:0:1 (season 0)');
+    eq(r.meta && r.meta.videos && r.meta.videos[18].id, 'tt5016504:1:1', 'Preacher video[18] = S1E1 tt5016504:1:1');
+    eq(r.meta && r.meta.videos && r.meta.videos[60].id, 'tt5016504:4:10', 'Preacher last video id tt5016504:4:10');
+    check(!f.calls.some((u) => u.includes('cinemeta')), 'Preacher: Cinemeta NOT called when /find hits (order: map -> find -> cinemeta)');
+  }
+
+  // 5b. Non-catalog movie via TMDB /find (Paddington 2).
+  {
+    const f = stubFetchFactory([
+      ['/find/tt4468740', PADDINGTON_FIND],
+      ['/movie/490132', PADDINGTON_DETAIL],
+    ]);
+    const r = await resolveMeta('tt4468740', 'movie', { key: KEY, fetchFn: f, tmdbIdForImdb: noMap });
+    eq(r.via, 'find', 'Paddington 2 resolves via TMDB /find');
+    eq(r.meta && r.meta.name, 'Paddington 2', 'Paddington 2 meta name');
+    eq(r.meta && r.meta.year, '2017', 'Paddington 2 meta year 2017 (UK release)');
+    eq(r.meta && r.meta.runtime, '104 min', 'Paddington 2 runtime 104 min');
+    eq(r.meta && r.meta.director, 'Paul King', 'Paddington 2 director Paul King');
+    check(typeof (r.meta && r.meta.poster) === 'string', 'Paddington 2 poster present');
+    check(!('videos' in (r.meta || {})), 'movie meta has no videos key');
+  }
+
+  // 5c. Id-map fast path still works + catalog titles byte-identical.
+  {
+    const f = stubFetchFactory([['/movie/12345', RAMAYANA]]);
+    const r = await resolveMeta('tt27988879', 'movie', { key: KEY, fetchFn: f, tmdbIdForImdb: mapRamayana });
+    eq(r.via, 'map', 'Ramayana resolves via the id map (fast path, no /find)');
+    check(!f.calls.some((u) => u.includes('/find/')), 'Ramayana: /find NOT called on a map hit');
+    const direct = buildMetaFromTmdb('tt27988879', 'movie', RAMAYANA);
+    eq(JSON.stringify(r.meta), JSON.stringify(direct), 'Ramayana meta via the new code path is byte-identical to the v1.1.6 direct build');
+  }
+
+  // 5d. Wrong type -> null, never a mismatched meta.
+  {
+    const f = stubFetchFactory([['/find/tt5016504', PREACHER_FIND]]);
+    eq(await findTmdbId('tt5016504', 'movie', KEY, f), null,
+      'findTmdbId: Preacher asked as a movie -> null (tv_results only, no movie_results)');
+    const r = await resolveMeta('tt5016504', 'movie', { key: KEY, fetchFn: f, tmdbIdForImdb: noMap });
+    eq(r.meta, null, 'resolveMeta: wrong-type Preacher as movie -> null (Cinemeta movie also empty in stub)');
+    eq(r.via, null, 'wrong-type -> via null');
+  }
+
+  // 5e. Fake/unknown id -> null without crashing (both TMDB + Cinemeta miss).
+  {
+    const f = stubFetchFactory([
+      ['/find/tt9999999', FIND_EMPTY],
+      ['v3-cinemeta.strem.io/meta/series/tt9999999', {}],
+    ]);
+    const r = await resolveMeta('tt9999999', 'series', { key: KEY, fetchFn: f, tmdbIdForImdb: noMap });
+    eq(r.meta, null, 'unknown series id -> null, no crash');
+    eq(r.via, null, 'unknown id -> via null');
+    const throwing = async () => { throw new Error('boom'); };
+    const r2 = await resolveMeta('tt9999999', 'series', { key: KEY, fetchFn: throwing, tmdbIdForImdb: noMap });
+    eq(r2.meta, null, 'fetch throwing -> null, never throws out of resolveMeta');
+    check(typeof r2.error === 'string', 'fetch failure surfaces as error string, not a crash');
+  }
+
+  // 5f. Cinemeta mapping (direct): series + movie shapes.
+  {
+    const f = stubFetchFactory([['v3-cinemeta.strem.io/meta/series/tt5016504', CINEMETA_PREACHER]]);
+    const m = await fetchMetaFromCinemeta('tt5016504', 'series', f);
+    eq(m.name, 'Preacher', 'Cinemeta Preacher name');
+    eq(m.year, '2016', 'Cinemeta Preacher year = first year of released (not the 2016–2019 range)');
+    eq(m.releaseInfo, '2016–2019', 'Cinemeta Preacher releaseInfo kept as-is (range)');
+    eq(m.poster, 'https://images.metahub.space/poster/small/tt5016504/img', 'Cinemeta Preacher poster');
+    eq(m.logo, 'https://images.metahub.space/logo/medium/tt5016504/img', 'Cinemeta Preacher logo');
+    eq(JSON.stringify(m.genres), JSON.stringify(['Adventure', 'Comedy', 'Fantasy']), 'Cinemeta Preacher genres');
+    eq(JSON.stringify(m.cast), JSON.stringify(['Dominic Cooper', 'Joe Gilgun', 'Ruth Negga']), 'Cinemeta Preacher cast bare strings');
+    eq(m.director, undefined, 'Cinemeta Preacher director null -> omitted');
+    eq(m.runtime, '45 min', 'Cinemeta Preacher runtime');
+    eq(m.imdbRating, '7.9', 'Cinemeta Preacher imdbRating');
+    eq(m.videos.length, 3, 'Cinemeta Preacher videos mapped (fixture has 3)');
+    eq(m.videos[0].id, 'tt5016504:0:1', 'Cinemeta video keeps its own id (incl. season-0 special)');
+    eq(m.videos[0].title, 'A Look at the Series', 'Cinemeta video title from name');
+    eq(m.videos[2].title, 'Masada', 'Cinemeta video S4E10 title');
+    check(!JSON.stringify(m).includes('credits_cast'), 'no credits_cast leaks into mapped meta');
+    check(!JSON.stringify(m).includes('moviedb_id'), 'no moviedb_id leaks into mapped meta');
+
+    const f2 = stubFetchFactory([['v3-cinemeta.strem.io/meta/movie/tt4468740', CINEMETA_PADDINGTION]]);
+    const m2 = await fetchMetaFromCinemeta('tt4468740', 'movie', f2);
+    eq(m2.name, 'Paddington 2', 'Cinemeta Paddington 2 name');
+    eq(m2.year, '2018', 'Cinemeta Paddington 2 year 2018 (its released date)');
+    eq(m2.director, 'Paul King', 'Cinemeta director ARRAY -> first element');
+    eq(m2.runtime, '104 min', 'Cinemeta Paddington 2 runtime');
+    eq(m2.imdbRating, '7.8', 'Cinemeta Paddington 2 imdbRating');
+    check(!('videos' in m2), 'Cinemeta movie meta has no videos key');
+
+    const f3 = stubFetchFactory([['v3-cinemeta.strem.io/meta/series/tt9999999', {}]]);
+    eq(await fetchMetaFromCinemeta('tt9999999', 'series', f3), null, 'Cinemeta {} (no meta key) -> null');
+    const f4 = stubFetchFactory([]);
+    eq(await fetchMetaFromCinemeta('tt9999999', 'series', f4), null, 'Cinemeta HTTP 404 -> null');
+  }
+
+  // 5g. Third fallback end-to-end: map miss + /find miss + Cinemeta hit.
+  {
+    const f = stubFetchFactory([
+      ['/find/tt5016504', FIND_EMPTY],
+      ['v3-cinemeta.strem.io/meta/series/tt5016504', CINEMETA_PREACHER],
+    ]);
+    const r = await resolveMeta('tt5016504', 'series', { key: KEY, fetchFn: f, tmdbIdForImdb: noMap });
+    eq(r.via, 'cinemeta', 'Preacher resolves via Cinemeta when map + /find both miss');
+    eq(r.meta && r.meta.name, 'Preacher', 'Cinemeta-fallback meta name');
+    eq(r.meta && r.meta.year, '2016', 'Cinemeta-fallback meta year');
+    check(f.calls.some((u) => u.includes('/find/tt5016504')), 'Cinemeta path tried /find first (order kept)');
+  }
+
   console.log(fail === 0 ? '\nALL META TESTS PASSED' : `\n${fail} META TEST(S) FAILED`);
   process.exit(fail === 0 ? 0 : 1);
 })();

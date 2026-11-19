@@ -22,13 +22,13 @@ const { fetchAllStreams, mergeStreamResults } = require('./lib/sources');
 const { formatStream } = require('./lib/parse');
 const { runWithRequest, isWindowsClient } = require('./lib/request-context');
 const { readCatalog, readCatalogMeta, readIdMap } = require('./lib/store');
-const { buildMetaFromTmdb } = require('./lib/meta');
+const { resolveMeta } = require('./lib/meta-fetch');
 const { searchCatalogs } = require('./lib/search');
 const { readConfig, writeConfig, effectiveCatalogs, normalizeConfig } = require('./lib/config');
 
 const STREAM_CAP = 40;
 const ADDON_NAME = 'binge-addon';
-const VERSION = '1.1.8';
+const VERSION = '1.2.0';
 
 const builder = new addonBuilder(MANIFEST);
 
@@ -92,10 +92,15 @@ builder.defineStreamHandler(async ({ type, id }) => {
   return { streams };
 });
 
-// --- Meta handler (v2.1.0): resolves tt id -> TMDB id via the persisted
-// Blob id map (catalogs/_idmap.json), then TMDB detail + credits.
-// Without the map entry or the TMDB key, returns an empty meta — Nuvio
-// then falls back to any other installed meta addon (e.g. Cinemeta).
+// --- Meta handler (v2.1.0, fallbacks v1.1.9 + v1.2.0): resolves tt id
+// -> TMDB id via the persisted Blob id map (catalogs/_idmap.json)
+// FIRST; when the map has no entry (title not in our catalogs — e.g.
+// Preacher tt5016504), falls back to TMDB /find
+// (external_source=imdb_id), respecting the requested type, then TMDB
+// detail + credits + images; if TMDB has no answer either, falls back
+// to Cinemeta's free keyless meta endpoint (v1.2.0, basant's ask).
+// Only when all three miss — or without the TMDB key — returns an
+// empty meta; Nuvio then falls back to any other installed meta addon.
 let reverseIdMapCache = null; // { at, map: { tt...: tmdbId } }
 async function tmdbIdForImdb(imdbId) {
   if (!reverseIdMapCache || Date.now() - reverseIdMapCache.at > 5 * 60 * 1000) {
@@ -116,46 +121,28 @@ builder.defineMetaHandler(async ({ type, id }) => {
     console.log('[binge-addon] meta: no TMDB_API_KEY');
     return { meta: null };
   }
-  const tmdbId = await tmdbIdForImdb(id);
-  if (!tmdbId) {
-    console.log(`[binge-addon] meta ${type}/${id}: no tmdb id in id map`);
+  const { meta, tmdbId, via, error } = await resolveMeta(id, type, {
+    key,
+    fetchFn: fetch,
+    tmdbIdForImdb,
+  });
+  if (!meta) {
+    console.log(`[binge-addon] meta ${type}/${id}: unresolved (no id-map entry, TMDB /find + Cinemeta both missed)${error ? ` — ${error}` : ''}`);
     return { meta: null };
   }
-  try {
-    const base = type === 'movie' ? 'movie' : 'tv';
-    // v1.1.6: `images` appended so the builder can set the detail-page
-    // logo from TMDB images.logos (English preferred, w500).
-    const url = `https://api.themoviedb.org/3/${base}/${tmdbId}?api_key=${key}&append_to_response=credits,images`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      console.log(`[binge-addon] meta ${type}/${id}: TMDB HTTP ${res.status}`);
-      return { meta: null };
-    }
-    const d = await res.json();
-    // v1.1.6: meta built by lib/meta.js (logo + year added; cast stays
-    // bare name strings — the Stremio protocol has no cast-picture
-    // field, see lib/meta.js).
-    const meta = buildMetaFromTmdb(id, type, d);
-    if (type === 'series' && Array.isArray(d.seasons)) {
-      const videos = [];
-      for (const s of d.seasons) {
-        if (!s.episode_count || s.episode_count < 1) continue;
-        for (let e = 1; e <= s.episode_count; e++) {
-          videos.push({
-            id: `${id}:${s.season_number}:${e}`,
-            title: `Episode ${e}`,
-            season: s.season_number,
-            episode: e,
-          });
-        }
-      }
-      if (videos.length) meta.videos = videos;
-    }
-    return { meta, cacheMaxAge: 86400, staleError: 86400 };
-  } catch (e) {
-    console.log(`[binge-addon] meta ${type}/${id} failed: ${e.message}`);
-    return { meta: null };
+  // v1.1.9: cache a find-resolved mapping in-memory so the next tap on
+  // the same title skips the /find call. Deliberately NOT written back
+  // to Blob _idmap.json — the daily rebuild regenerates that map from
+  // catalog titles only, so a write-back would be overwritten anyway,
+  // and a bad write could corrupt the map for every title.
+  // (A Cinemeta-resolved title has no TMDB id to cache — nothing to do.)
+  if (via === 'find' && reverseIdMapCache) {
+    reverseIdMapCache.map[id] = String(tmdbId);
+    console.log(`[binge-addon] meta ${type}/${id}: resolved via TMDB /find -> tmdb:${tmdbId}`);
+  } else if (via === 'cinemeta') {
+    console.log(`[binge-addon] meta ${type}/${id}: resolved via Cinemeta fallback`);
   }
+  return { meta, cacheMaxAge: 86400, staleError: 86400 };
 });
 
 const app = express();
