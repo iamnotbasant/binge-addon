@@ -26,7 +26,7 @@ const { readConfig, writeConfig, effectiveCatalogs, normalizeConfig } = require(
 const STREAM_CAP = 40;
 const TMDB_IMG = 'https://image.tmdb.org/t/p';
 const ADDON_NAME = 'binge-addon';
-const VERSION = '1.1.4';
+const VERSION = '1.1.5';
 
 const builder = new addonBuilder(MANIFEST);
 
@@ -63,7 +63,12 @@ builder.defineStreamHandler(async ({ type, id }) => {
   // v1.1.2: CAM streams appear ONLY when zero clean streams survive
   // across ALL sources (mergeStreamResults enforces the rule).
   const { parsed, usedCam } = mergeStreamResults(results, STREAM_CAP);
-  const streams = parsed.map(formatStream);
+  // v1.1.5 blueprint: season/episode come from the request id
+  // (authoritative) and are threaded into formatStream for the
+  // 🎬 line 1 (🍂 Sxx 🎞️ Exx); movies have no S/E part.
+  const se = id.match(/^tt\d+:(\d+):(\d+)$/);
+  const streams = parsed.map((p) => formatStream(p, se
+    ? { season: parseInt(se[1], 10), episode: parseInt(se[2], 10) } : {}));
   console.log(`[binge-addon] stream ${type}/${id}: returning ${streams.length} ${usedCam ? 'CAM fallback' : 'clean'} streams`);
   return { streams };
 });

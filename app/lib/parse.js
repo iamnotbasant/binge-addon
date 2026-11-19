@@ -282,7 +282,7 @@ function parseChannels(text) {
 }
 
 // ---------------------------------------------------------------------------
-// Release group, duration, debrid-ready markers (compact format, v1.1.4).
+// Release group, duration, debrid-ready markers (blueprint format, v1.1.5).
 // All three come ONLY from tokens actually present in the raw source
 // text; a missing token means its line is omitted, never invented.
 // ---------------------------------------------------------------------------
@@ -384,7 +384,28 @@ function parseReady(text) {
   return code.length <= 4 ? code : null;
 }
 
-// Flag emoji per audio language (compact format, v1.1.4): Hindi and every
+// Debrid-provider label, only when the raw source text carries it
+// ("DebridAccount|torbox" — Comet titles; Torrentio/HdHub never carry
+// it). The full token is shown as-is; anything else ("dmm_hashlist")
+// is Comet/MediaFusion-internal junk and stays out.
+function parseDebridProvider(text) {
+  const m = (text || '').match(/DebridAccount\|[A-Za-z0-9_.-]+/i);
+  return m ? m[0] : null;
+}
+
+// Duration in seconds, from the "41m:22s" / "1h 23m" text parseDuration
+// returns (null when there is no duration). Used for the bitrate line —
+// bitrate is size/duration, never guessed from a missing duration.
+function durationSeconds(dur) {
+  if (!dur) return null;
+  let m = dur.match(/^(\d+)m:(\d+)s$/);
+  if (m) return (+m[1]) * 60 + (+m[2]);
+  m = dur.match(/^(\d+)h (\d+)m$/);
+  if (m) return (+m[1]) * 3600 + (+m[2]) * 60;
+  return null;
+}
+
+// Flag emoji per audio language (blueprint format, v1.1.5): Hindi and every
 // other Indian language fly 🇮🇳; English flies 🇬🇧; the rest use the
 // FLAG_LANG reverse map. A language with no flag gets none — never
 // invented.
@@ -396,7 +417,7 @@ for (const [flag, lang] of Object.entries(FLAG_LANG)) {
   if (!LANG_FLAG[lang]) LANG_FLAG[lang] = flag;
 }
 
-// Addon display name per source (provider line, compact format v1.1.4).
+// Addon display name per source (provider line, blueprint format v1.1.5).
 const PROVIDER_LABEL = { torrentio: 'Torrentio', comet: 'Comet', hdhub: 'HdHub' };
 
 // Hindi first, English second, the rest alphabetical — deterministic, so
@@ -442,6 +463,7 @@ function parseTorrentioLike(stream) {
       isBareDomainTitle(fromFile) ? (fromTitle || fromFile) : (fromFile || fromTitle)),
     duration: parseDuration(parseText),
     ready: parseReady(parseText),
+    debrid: parseDebridProvider(parseText),
     displayTitle,
     rawText: parseText,
   };
@@ -493,6 +515,7 @@ function parseHdHub(stream) {
     group: parseReleaseGroup(filename, cleanTitle(filename)),
     duration: parseDuration(parseText),
     ready: parseReady(parseText),
+    debrid: parseDebridProvider(parseText),
     displayTitle: cleanTitle(filename),
     rawText: parseText,
   };
@@ -602,10 +625,21 @@ function cleanTitle(text) {
 // tech token instead. Returns '' when nothing usable remains; the caller
 // falls back to the full cleaned title.
 function extractDisplayName(cleaned) {
+  const base = extractBaseTitle(cleaned);
+  if (!base) return '';
+  const series = (cleaned || '').match(/\bS(\d{1,2})E(\d{1,2})\b/i);
+  if (series) return `${base} S${String(series[1]).padStart(2, '0')}E${String(series[2]).padStart(2, '0')}`;
+  return base;
+}
+
+// Title + year only, WITHOUT the SxxExx tag ("Reacher (2022)") — the
+// blueprint line 1 (v1.1.5) shows season/episode as separate 🍂/🎞️
+// tokens, so the base title must not carry the tag itself.
+function extractBaseTitle(cleaned) {
   const t = (cleaned || '').trim();
   if (!t) return '';
-  const series = t.match(/\bS(\d{1,2})E(\d{1,2})\b/i);
   const year = t.match(/\b(19|20)\d\d\b/);
+  const series = t.match(/\bS(\d{1,2})E(\d{1,2})\b/i);
   let cut = t.length;
   if (year) cut = Math.min(cut, year.index);
   if (series) cut = Math.min(cut, series.index);
@@ -619,10 +653,14 @@ function extractDisplayName(cleaned) {
   title = title.replace(/([A-Za-z])-(\d)/g, '$1 $2').replace(/(\d)-([A-Za-z])/g, '$1 $2');
   title = title.replace(/[\s\-–—:([{]+$/g, '').replace(/\s+/g, ' ').trim();
   if (!title) return '';
-  let out = title;
-  if (year) out += ` (${year[0]})`;
-  if (series) out += ` S${String(series[1]).padStart(2, '0')}E${String(series[2]).padStart(2, '0')}`;
-  return out;
+  return year ? `${title} (${year[0]})` : title;
+}
+
+// Season/episode tag ("S04E02") from a title string, or null.
+function seriesTag(text) {
+  const m = (text || '').match(/\bS(\d{1,2})E(\d{1,2})\b/i);
+  if (!m) return null;
+  return { season: parseInt(m[1], 10), episode: parseInt(m[2], 10) };
 }
 
 // ---------------------------------------------------------------------------
@@ -783,34 +821,60 @@ function resLabel(res) {
   return 'Unknown';
 }
 
-// Compact display format (v1.1.4, basant: "image jaisa banao") — the
-// AIOStreams minimalist shape, so Nuvio renders the same compact card:
-//   Name: "Jailer 2 (2026)"                  (title + year only, unchanged)
-//   1080p | BluRay REMUX AVC ⏱ 41m:22s      (resolution | source + HDR + encode [+ duration])
-//   DTS-HD MA 5.1 🇬🇧                        (primary codec + channels + flag emojis)
-//   💾 8.5 GB                                (size once)
-//   📦 Preacher                              (release group)
-//   🔍 Comet ⚡ Ready (TB)                    (source addon [+ debrid-ready passthrough])
+// NAME-header label per resolution (blueprint format, v1.1.5): the NAME
+// is the resolution badge, not the title. 2160p never fires (the 1080p
+// cap drops those streams) but the mapping is implemented anyway.
+const RESOLUTION_LABEL = {
+  2160: '🔥 4K', 1080: '🚀 FHD', 1080.1: '🚀 FHD', 720: '⚡ HD', 480: '💿 SD',
+};
+
+// Exact 7-line AIOStreams blueprint layout (v1.1.5, basant: screenshot
+// ka poora blueprint — v1.1.4 ka compact format bhi exact nahi laga).
+// The NAME is the resolution badge; the description is 6 lines:
+//   NAME: 🚀 FHD                              (resolution icon + label)
+//   🎬 Reacher (2022) 🍂 S04 🎞️ E02          (title + season/episode; movies: no S/E)
+//   📹 BluRay REMUX 🎞️ AVC ⏱️ 41m:22s        (source + HDR + encode [+ duration])
+//   🎧 DTS-HD MA 🔊 5.1 🌐 🇬🇧                 (codec [+ channels] [+ flags, ' / ' joined])
+//   📦 8.5 GB 📊 27.4 Mbps                    (size [+ bitrate, only with duration])
+//   🏷️ Preacher 💎 DebridAccount|torbox      (group, NOGRP default [+ debrid provider])
+//   ⚡ Ready (TB) 🔍 Comet                    (debrid-ready [+ always the source addon])
 // Each line is omitted entirely when its signal is genuinely missing —
-// never invented. Duration/Ready come ONLY from tokens parsed out of the
-// raw source title (Comet carries them; Torrentio does not). The HDR
-// variant stays in line 1 (it feeds the Onyx HDR badges, and dropping it
-// would lose a real signal vs v1.1.3). CAM streams: "720p CAM TeleSync"
-// in line 1 (v1.1.2 rule, label dropped with the rest). Dropped from
-// display by design: secondary audio tracks (only the primary codec
-// shows), bitrates (192Kbps), ESub/ORG/HQ/TRUE/LiNE/HC junk,
-// Comet-internal tokens ("NOGRP", "DebridAccount|torbox",
-// "dmm_hashlist"), the filename's rounded size (the 💾 size is
-// authoritative).
-function formatStream(p) {
+// never invented. Duration/Ready/debrid come ONLY from tokens parsed out
+// of the raw source title (Comet carries them; Torrentio does not —
+// verified live 19 Nov). "⏳ Uncached" is NEVER written: a plain torrent
+// is not "uncached", it is just a torrent. The HDR variant stays in
+// line 2 (it feeds the Onyx HDR badges — dropping it would lose a real
+// signal vs v1.1.3). CAM streams: "📹 720p CAM TeleSync …" in line 2
+// (v1.1.2 rule, label dropped with the rest). Dropped from display by
+// design: secondary audio tracks (only the primary codec shows),
+// bitrates (192Kbps), ESub/ORG/HQ/TRUE/LiNE/HC junk, Comet-internal
+// tokens ("NOGRP" as a raw token, "dmm_hashlist"), the filename's
+// rounded size (the 📦 size is authoritative). "SIZE 8.5 GB" bottom pill
+// is Nuvio's own footer, not addon text — nothing to do for it.
+function formatStream(p, opts = {}) {
   const s = p.raw;
   const res = resLabel(p.resolution);
-  const name = extractDisplayName(p.displayTitle) || p.displayTitle || 'Binge Addon';
+  const displayName = extractDisplayName(p.displayTitle) || p.displayTitle || 'Binge Addon';
+  const baseTitle = extractBaseTitle(p.displayTitle) || displayName;
 
-  // Line 1: resolution | source + HDR + encode. CAM streams keep the
-  // v1.1.2 marking ("720p CAM TeleSync") with no pipe — CAM + kind can
-  // never be mistaken for clean HD. Clean streams are never marked.
-  // "Remux" rides along after the primary source ("BluRay REMUX") —
+  // NAME (header): the resolution badge. Unknown resolution falls back
+  // to the display title, as before.
+  const name = RESOLUTION_LABEL[p.resolution] || displayName;
+
+  // Line 1: 🎬 base title + 🍂 Sxx 🎞️ Exx for series. Season/episode
+  // come from the request id (opts, authoritative); a direct caller
+  // without opts falls back to the SxxExx tag in the display title.
+  const se = (opts.season != null && opts.episode != null)
+    ? { season: opts.season, episode: opts.episode }
+    : seriesTag(p.displayTitle);
+  let line1 = `🎬 ${baseTitle}`;
+  if (se) {
+    line1 += ` 🍂 S${String(se.season).padStart(2, '0')} 🎞️ E${String(se.episode).padStart(2, '0')}`;
+  }
+
+  // Line 2: 📹 source + HDR + 🎞️ encode [+ ⏱️ duration]. CAM keeps the
+  // v1.1.2 marking (resolution + CAM + kind) in this line.
+  // "Remux" rides along after the primary source ("BluRay Remux") —
   // the screenshot's top stream shows exactly that pair.
   const sourceList = ['BluRay', 'WEB-DL', 'WEBRip', 'HDRip', 'HDTV'];
   const source = sourceList.find((t) => p.visual.includes(t))
@@ -823,45 +887,67 @@ function formatStream(p) {
   const encode = p.encode && p.encode.length
     ? (p.encode[0] === '10bit' ? '10-Bit' : p.encode[0])
     : null;
-  let line1 = '';
+  let line2 = '';
   if (p.isCam) {
     const bits = [];
     if (p.resolution) bits.push(resLabel(p.resolution));
     bits.push('CAM');
     if (p.camKind && !['CAM', 'HDCAM', 'CAMRip'].includes(p.camKind)) bits.push(p.camKind);
     if (sourceBits.length) bits.push(...sourceBits);
+    if (hdrBits.length) bits.push(...hdrBits);
     if (encode) bits.push(encode);
-    line1 = bits.join(' ');
+    line2 = `📹 ${bits.join(' ')}`;
   } else {
-    const tail = [...sourceBits, ...hdrBits, encode].filter(Boolean).join(' ');
-    line1 = p.resolution ? (tail ? `${resLabel(p.resolution)} | ${tail}` : resLabel(p.resolution)) : tail;
+    const before = [...sourceBits, ...hdrBits].join(' ');
+    if (before && encode) line2 = `📹 ${before} 🎞️ ${encode}`;
+    else if (before) line2 = `📹 ${before}`;
+    else if (encode) line2 = `📹 🎞️ ${encode}`;
   }
-  if (line1 && p.duration) line1 += ` ⏱ ${p.duration}`;
+  if (p.duration) line2 = line2 ? `${line2} ⏱️ ${p.duration}` : `📹 ⏱️ ${p.duration}`;
 
-  // Line 2: primary codec + channels + flag emojis. findTags returns
+  // Line 3: 🎧 codec [+ 🔊 channels] [+ 🌐 flags]. findTags returns
   // codecs in priority order (Atmos > TrueHD > DTS-HD MA > DTS > DD+ >
   // DD > AAC...), so audio[0] is the best track; secondary tracks
   // ("DD+ 5.1 & AAC") are dropped. Languages come from p.audioLangs —
   // the single flag-priority set — so the line can never contradict
   // itself. Identical flags collapse to one (four Indian languages all
-  // fly 🇮🇳 — "🇮🇳 🇮🇳 🇮🇳 🇮🇳" would look broken).
+  // fly 🇮🇳 — "🇮🇳 / 🇮🇳 / 🇮🇳 / 🇮🇳" would look broken).
   const audioLangs = p.audioLangs
     || new Set([...p.langs].filter((l) => LANG_LABEL[l]));
-  const flags = [...new Set(orderLangs(audioLangs).map((l) => LANG_FLAG[l]).filter(Boolean))].join(' ');
-  let codecPart = '';
+  const flags = [...new Set(orderLangs(audioLangs).map((l) => LANG_FLAG[l]).filter(Boolean))].join(' / ');
+  let line3 = '';
   if (p.audio.length) {
-    codecPart = p.audio[0];
-    if (p.channels) codecPart += ` ${p.channels}`;
+    line3 = `🎧 ${p.audio[0]}`;
+    if (p.channels) line3 += ` 🔊 ${p.channels}`;
   }
-  const line2 = [codecPart, flags].filter(Boolean).join(' ');
+  if (flags) line3 += `${line3 ? ' ' : ''}🌐 ${flags}`;
 
-  const lines = [];
-  if (line1) lines.push(line1);
+  // Line 4: 📦 size [+ 📊 bitrate]. Bitrate needs BOTH size and
+  // duration (size × 8 / seconds / 1e6, 1 decimal); without a duration
+  // the 📊 part is hidden entirely — never guessed.
+  let line4 = '';
+  if (p.size) {
+    line4 = `📦 ${p.size.value} ${p.size.unit}`;
+    const secs = durationSeconds(p.duration);
+    if (secs) line4 += ` 📊 ${(sizeBytes(p.size) * 8 / secs / 1e6).toFixed(1)} Mbps`;
+  }
+
+  // Line 5: 🏷️ group (NOGRP default — the blueprint's explicit
+  // default) [+ 💎 debrid provider, only when the raw title carries a
+  // DebridAccount token].
+  const line5 = `🏷️ ${p.group || 'NOGRP'}${p.debrid ? ` 💎 ${p.debrid}` : ''}`;
+
+  // Line 6: ⚡ Ready (XX) [+ 🔍 source]. Ready appears only when the
+  // token exists; the source addon always shows.
+  const provider = PROVIDER_LABEL[p.source] || 'Binge Addon';
+  const line6 = `${p.ready ? `⚡ Ready (${p.ready}) ` : ''}🔍 ${provider}`;
+
+  const lines = [line1];
   if (line2) lines.push(line2);
-  if (p.size) lines.push(`💾 ${p.size.value} ${p.size.unit}`);
-  if (p.group) lines.push(`📦 ${p.group}`);
-  const provider = PROVIDER_LABEL[p.source];
-  if (provider) lines.push(`🔍 ${provider}${p.ready ? ` ⚡ Ready (${p.ready})` : ''}`);
+  if (line3) lines.push(line3);
+  if (line4) lines.push(line4);
+  lines.push(line5);
+  lines.push(line6);
 
   const hints = {};
   if (s.behaviorHints) {
@@ -898,6 +984,9 @@ function formatStream(p) {
 module.exports = {
   parseLanguages, parseAudioLanguages, parseChannels, parseResolution,
   parseSeeders, parseReleaseGroup, parseDuration, parseReady,
+  parseDebridProvider, durationSeconds,
   languageVerdict, languageRank, compareParsed, compareCam,
   camKind, processSourceStreams, dedupe, formatStream, cleanTitle, extractDisplayName,
+  extractBaseTitle,
 };
+

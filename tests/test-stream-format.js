@@ -1,16 +1,19 @@
-// Binge Addon — compact stream title + description format tests (v1.1.4).
-// Compact format (basant-approved, "image jaisa banao" — AIOStreams
-// minimalist shape, so Nuvio renders the same compact card):
-//   Name: "Jailer 2 (2026)"              (title + year only, unchanged)
-//   1080p | BluRay REMUX AVC ⏱ 41m:22s   (resolution | source + HDR + encode [+ duration])
-//   DTS-HD MA 5.1 🇬🇧                     (primary codec + channels + flag emojis)
-//   💾 8.5 GB                             (size once)
-//   📦 Preacher                           (release group)
-//   🔍 Comet ⚡ Ready (TB)                 (source addon [+ debrid-ready passthrough])
+// Binge Addon — exact 7-line AIOStreams blueprint stream format tests (v1.1.5).
+// Blueprint format (basant: screenshot ka poora blueprint, final target):
+//   NAME: 🚀 FHD                              (resolution icon + label)
+//   🎬 Reacher (2022) 🍂 S04 🎞️ E02          (title + season/episode; movies: no S/E)
+//   📹 BluRay REMUX 🎞️ AVC ⏱️ 41m:22s        (source + HDR + encode [+ duration])
+//   🎧 DTS-HD MA 🔊 5.1 🌐 🇬🇧                 (codec [+ channels] [+ flags, ' / ' joined])
+//   📦 8.5 GB 📊 27.4 Mbps                    (size [+ bitrate, only with duration])
+//   🏷️ Preacher 💎 DebridAccount|torbox      (group, NOGRP default [+ debrid provider])
+//   ⚡ Ready (TB) 🔍 Comet                    (debrid-ready [+ always the source addon])
 // Rules: each line omitted when its signal is genuinely missing — never
-// invented. Duration/Ready come ONLY from tokens parsed out of the raw
-// source title (Comet carries them; Torrentio does not). Flags win over
-// filename language words (see parseAudioLanguages). Badges NOT in scope.
+// invented. Duration/Ready/debrid come ONLY from tokens parsed out of the
+// raw source title (Comet carries them; Torrentio does not). "⏳ Uncached"
+// is never written. Flags win over filename language words
+// (see parseAudioLanguages). Badges NOT in scope here (test-badges.js
+// covers the pack; its res/language patterns were extended in v1.1.5 to
+// match the new 🚀 FHD / 🇮🇳🇬🇧 tokens).
 // Fixtures are REAL live raw streams (tests/fixtures/stream-format-corpus.json)
 // captured 18 Nov 2026, plus ONE synthetic series row (no live series row
 // existed: Torrentio returned 0 streams for Mirzapur/Panchayat S1E1).
@@ -21,9 +24,10 @@ const fs = require('fs');
 const path = require('path');
 const parse = require('../app/lib/parse');
 const {
-  processSourceStreams, formatStream, extractDisplayName,
+  processSourceStreams, formatStream, extractDisplayName, extractBaseTitle,
   parseAudioLanguages, parseChannels,
   parseReleaseGroup, parseDuration, parseReady,
+  parseDebridProvider, durationSeconds,
 } = parse;
 
 let fail = 0;
@@ -98,30 +102,28 @@ const fixtures = JSON.parse(fs.readFileSync(
   path.join(__dirname, 'fixtures', 'stream-format-corpus.json'), 'utf8'));
 // [id, expected name, expected description]
 const EXPECTED = {
-  'jailer2-torrentio-1': ['Jailer 2 (2026)', '1080p | HDRip HEVC\nDD+ 5.1 🇮🇳 🇬🇧\n💾 1.57 GB\n🔍 Torrentio'],
-  'jailer2-torrentio-2': ['Jailer 2 (2026)', '1080p | WEB-DL AVC\nDD+ 5.1 🇮🇳 🇬🇧\n💾 2.99 GB\n🔍 Torrentio'],
-  'jailer2-torrentio-3': ['Jailer 2 (2026)', '1080p | HDRip x264\nAAC 🇮🇳\n💾 2.91 GB\n🔍 Torrentio'],
-  'jailer2-torrentio-4': ['Jailer 2 (2026)', '1080p | WEB-DL AVC\nDD+ 5.1 🇮🇳 🇬🇧\n💾 2.99 GB\n🔍 Torrentio'],
-  'jailer2-hdhub-1': ['Jailer 2 (2026)', '1080p | WEB-DL x264\nDD+ 5.1 🇮🇳\n💾 12.75 GB\n🔍 HdHub'],
-  'jailer2-hdhub-2': ['Jailer 2 (2026)', '1080p | HDRip HDR x264\n🇮🇳\n💾 11.95 GB\n🔍 HdHub'],
-  'dangal-torrentio-1': ['Dangal (2016)', '1080p | Remux x264\n🇮🇳 🇬🇧 🇷🇺\n💾 32.18 GB\n🔍 Torrentio'],
-  'dangal-torrentio-2': ['Dangal (2016)', '1080p | BluRay x264\nDD 🇮🇳\n💾 2.7 GB\n📦 M2Tv\n🔍 Torrentio'],
-  'dangal-torrentio-3': ['Dangal (2016)', '1080p | BluRay x265\nAtmos 7.1 🇮🇳\n💾 7.64 GB\n📦 SAMPA\n🔍 Torrentio'],
-  'dangal-torrentio-4': ['Dangal (2016)', '1080p | BluRay x264\nDD 5.1 🇮🇳\n💾 4.38 GB\n📦 Hon3y\n🔍 Torrentio'],
-  'dangal-hdhub-1': ['Dangal (2016)', '1080p | BluRay HEVC\n🇮🇳\n💾 2 GB\n🔍 HdHub'],
-  '3idiots-torrentio-1': ['3 Idiots (2009)', '1080p | BluRay x264\nAAC 🇮🇳\n💾 2.51 GB\n📦 Ozlem\n🔍 Torrentio'],
-  '3idiots-torrentio-2': ['3 Idiots (2009)', '1080p | x264\nAAC 🇮🇳 🇬🇧\n💾 2.49 GB\n🔍 Torrentio'],
-  '3idiots-torrentio-3': ['3 Idiots (2009)', '1080p | BluRay HEVC\nAAC 7.1 🇮🇳 🇨🇳\n💾 4.17 GB\n📦 Natty\n🔍 Torrentio'],
-  '3idiots-torrentio-4': ['3 Idiots (2009)', '1080p | BluRay x264\nDTS-HD MA 7.1 🇮🇳\n💾 15.02 GB\n📦 Hon3yHD\n🔍 Torrentio'],
-  '3idiots-hdhub-1': ['3 Idiots (2009)', '1080p | BluRay x264\nDD 5.1 🇮🇳\n💾 3.3 GB\n🔍 HdHub'],
-  'interstellar-torrentio-1': ['Interstellar (2014)', '1080p | BluRay x264\n🇮🇳 🇬🇧\n💾 2.26 GB\n📦 YIFY\n🔍 Torrentio'],
-  'interstellar-torrentio-2': ['Interstellar (2014)', '1080p | BluRay x264\nDD+ 2.0 🇮🇳 🇬🇧\n💾 2.56 GB\n🔍 Torrentio'],
-  // Truncated HdHub descriptions (no .mkv): the name must NOT keep the
-  // "[10Gbps Download Only] [💾 34.07 GB]" host labels (regression).
-  'interstellar-hdhub-trunc-1': ['Interstellar (2014)', '1080p | BluRay Remux AVC\nDTS-HD MA 5.1 🇮🇳 🇬🇧\n💾 34.07 GB\n🔍 HdHub'],
-  'interstellar-hdhub-trunc-2': ['Interstellar (2014)', '1080p | BluRay HEVC\nDD+ 5.1 🇮🇳 🇬🇧\n💾 13.99 GB\n📦 WiKi\n🔍 HdHub'],
-  'interstellar-hdhub-trunc-3': ['Interstellar (2014)', '1080p | BluRay HEVC\nDD+ 5.1 🇮🇳 🇬🇧\n💾 9.47 GB\n🔍 HdHub'],
-  'mirzapur-series-synthetic': ['Mirzapur S01E01', '1080p | WEB-DL x264\nDD+ 5.1 🇮🇳\n💾 2.41 GB\n🔍 Torrentio'],
+  'jailer2-torrentio-1': ['🚀 FHD', '🎬 Jailer 2 (2026)\n📹 HDRip 🎞️ HEVC\n🎧 DD+ 🔊 5.1 🌐 🇮🇳 / 🇬🇧\n📦 1.57 GB\n🏷️ NOGRP\n🔍 Torrentio'],
+  'jailer2-torrentio-2': ['🚀 FHD', '🎬 Jailer 2 (2026)\n📹 WEB-DL 🎞️ AVC\n🎧 DD+ 🔊 5.1 🌐 🇮🇳 / 🇬🇧\n📦 2.99 GB\n🏷️ NOGRP\n🔍 Torrentio'],
+  'jailer2-torrentio-3': ['🚀 FHD', '🎬 Jailer 2 (2026)\n📹 HDRip 🎞️ x264\n🎧 AAC 🌐 🇮🇳\n📦 2.91 GB\n🏷️ NOGRP\n🔍 Torrentio'],
+  'jailer2-torrentio-4': ['🚀 FHD', '🎬 Jailer 2 (2026)\n📹 WEB-DL 🎞️ AVC\n🎧 DD+ 🔊 5.1 🌐 🇮🇳 / 🇬🇧\n📦 2.99 GB\n🏷️ NOGRP\n🔍 Torrentio'],
+  'jailer2-hdhub-1': ['🚀 FHD', '🎬 Jailer 2 (2026)\n📹 WEB-DL 🎞️ x264\n🎧 DD+ 🔊 5.1 🌐 🇮🇳\n📦 12.75 GB\n🏷️ NOGRP\n🔍 HdHub'],
+  'jailer2-hdhub-2': ['🚀 FHD', '🎬 Jailer 2 (2026)\n📹 HDRip HDR 🎞️ x264\n🌐 🇮🇳\n📦 11.95 GB\n🏷️ NOGRP\n🔍 HdHub'],
+  'dangal-torrentio-1': ['🚀 FHD', '🎬 Dangal (2016)\n📹 Remux 🎞️ x264\n🌐 🇮🇳 / 🇬🇧 / 🇷🇺\n📦 32.18 GB\n🏷️ NOGRP\n🔍 Torrentio'],
+  'dangal-torrentio-2': ['🚀 FHD', '🎬 Dangal (2016)\n📹 BluRay 🎞️ x264\n🎧 DD 🌐 🇮🇳\n📦 2.7 GB\n🏷️ M2Tv\n🔍 Torrentio'],
+  'dangal-torrentio-3': ['🚀 FHD', '🎬 Dangal (2016)\n📹 BluRay 🎞️ x265\n🎧 Atmos 🔊 7.1 🌐 🇮🇳\n📦 7.64 GB\n🏷️ SAMPA\n🔍 Torrentio'],
+  'dangal-torrentio-4': ['🚀 FHD', '🎬 Dangal (2016)\n📹 BluRay 🎞️ x264\n🎧 DD 🔊 5.1 🌐 🇮🇳\n📦 4.38 GB\n🏷️ Hon3y\n🔍 Torrentio'],
+  'dangal-hdhub-1': ['🚀 FHD', '🎬 Dangal (2016)\n📹 BluRay 🎞️ HEVC\n🌐 🇮🇳\n📦 2 GB\n🏷️ NOGRP\n🔍 HdHub'],
+  '3idiots-torrentio-1': ['🚀 FHD', '🎬 3 Idiots (2009)\n📹 BluRay 🎞️ x264\n🎧 AAC 🌐 🇮🇳\n📦 2.51 GB\n🏷️ Ozlem\n🔍 Torrentio'],
+  '3idiots-torrentio-2': ['🚀 FHD', '🎬 3 Idiots (2009)\n📹 🎞️ x264\n🎧 AAC 🌐 🇮🇳 / 🇬🇧\n📦 2.49 GB\n🏷️ NOGRP\n🔍 Torrentio'],
+  '3idiots-torrentio-3': ['🚀 FHD', '🎬 3 Idiots (2009)\n📹 BluRay 🎞️ HEVC\n🎧 AAC 🔊 7.1 🌐 🇮🇳 / 🇨🇳\n📦 4.17 GB\n🏷️ Natty\n🔍 Torrentio'],
+  '3idiots-torrentio-4': ['🚀 FHD', '🎬 3 Idiots (2009)\n📹 BluRay 🎞️ x264\n🎧 DTS-HD MA 🔊 7.1 🌐 🇮🇳\n📦 15.02 GB\n🏷️ Hon3yHD\n🔍 Torrentio'],
+  '3idiots-hdhub-1': ['🚀 FHD', '🎬 3 Idiots (2009)\n📹 BluRay 🎞️ x264\n🎧 DD 🔊 5.1 🌐 🇮🇳\n📦 3.3 GB\n🏷️ NOGRP\n🔍 HdHub'],
+  'interstellar-torrentio-1': ['🚀 FHD', '🎬 Interstellar (2014)\n📹 BluRay 🎞️ x264\n🌐 🇮🇳 / 🇬🇧\n📦 2.26 GB\n🏷️ YIFY\n🔍 Torrentio'],
+  'interstellar-torrentio-2': ['🚀 FHD', '🎬 Interstellar (2014)\n📹 BluRay 🎞️ x264\n🎧 DD+ 🔊 2.0 🌐 🇮🇳 / 🇬🇧\n📦 2.56 GB\n🏷️ NOGRP\n🔍 Torrentio'],
+  'interstellar-hdhub-trunc-1': ['🚀 FHD', '🎬 Interstellar (2014)\n📹 BluRay Remux 🎞️ AVC\n🎧 DTS-HD MA 🔊 5.1 🌐 🇮🇳 / 🇬🇧\n📦 34.07 GB\n🏷️ NOGRP\n🔍 HdHub'],
+  'interstellar-hdhub-trunc-2': ['🚀 FHD', '🎬 Interstellar (2014)\n📹 BluRay 🎞️ HEVC\n🎧 DD+ 🔊 5.1 🌐 🇮🇳 / 🇬🇧\n📦 13.99 GB\n🏷️ WiKi\n🔍 HdHub'],
+  'interstellar-hdhub-trunc-3': ['🚀 FHD', '🎬 Interstellar (2014)\n📹 BluRay 🎞️ HEVC\n🎧 DD+ 🔊 5.1 🌐 🇮🇳 / 🇬🇧\n📦 9.47 GB\n🏷️ NOGRP\n🔍 HdHub'],
+  'mirzapur-series-synthetic': ['🚀 FHD', '🎬 Mirzapur 🍂 S01 🎞️ E01\n📹 WEB-DL 🎞️ x264\n🎧 DD+ 🔊 5.1 🌐 🇮🇳\n📦 2.41 GB\n🏷️ NOGRP\n🔍 Torrentio'],
 };
 for (const f of fixtures) {
   const { kept } = processSourceStreams(f.source, [f.raw]);
@@ -150,6 +152,8 @@ for (const f of fixtures) {
   const { kept } = processSourceStreams(f.source, [f.raw]);
   if (kept.length) outputs.push({ id: f.id, ...formatStream(kept[0]) });
 }
+// All 22 corpus fixtures are 1080p, so every NAME is the FHD header.
+check(outputs.every((o) => o.name === '🚀 FHD'), 'every fixture name is the 🚀 FHD header (all 1080p)');
 check(!outputs.some((o) => TECH_IN_NAME.test(o.name)), 'no tech/size/codec/junk token in any name');
 check(!outputs.some((o) => /Quality:|Audio:|Size:|Note:/.test(o.description)),
   'no labeled lines anywhere (v1.1.1 Telegram format is gone)');
@@ -160,35 +164,27 @@ check(!outputs.some((o) => /192Kbps|640Kbps|224Kbps|ESub|ESubs/i.test(`${o.name}
 check(!outputs.some((o) => LANG_WORD.test(o.description)),
   'no language WORD in any description (flags carry the languages now)');
 check(!outputs.some((o) => /Telugu/.test(o.name)), 'no language word in any name (the contradiction is gone)');
-check(outputs.every((o) => (o.description.match(/💾/g) || []).length === 1),
-  'exactly one 💾 size line per stream');
+check(!outputs.some((o) => /Uncached|⏳/.test(o.description)), "never '⏳ Uncached' (a plain torrent is not uncached)");
+check(outputs.every((o) => (o.description.match(/📦/g) || []).length === 1),
+  'exactly one 📦 size line per stream');
+check(outputs.every((o) => (o.description.match(/🏷️/g) || []).length === 1),
+  'exactly one 🏷️ group line per stream (NOGRP default when no group)');
 check(outputs.every((o) => (o.description.match(/🔍/g) || []).length === 1),
   'exactly one 🔍 provider line per stream');
-check(outputs.every((o) => (o.description.match(/📦/g) || []).length <= 1),
-  'at most one 📦 group line per stream');
 check(outputs.every((o) => (o.description.match(/\d+(\.\d+)?\s*(GB|MB)/g) || []).length === 1),
-  'size appears once (never in the res/audio lines)');
+  'size appears once (never in the title / spec / audio lines)');
 check(outputs.every((o) => {
   const lines = o.description.split('\n');
-  // Line 1 never carries flags; the 💾/📦/🔍 lines never do either —
-  // flags live ONLY on the audio line.
-  if (FLAG_RE.test(lines[0])) return false;
-  return lines.slice(2).every((l) => !FLAG_RE.test(l));
-}), 'flags appear only on the audio line (never line 1 / size / group / provider)');
-check(outputs.every((o) => {
-  const lines = o.description.split('\n');
-  // First line is the res/source/encode line (or a CAM line): it must
-  // carry a resolution, a source, an encode or CAM — never a bare size
-  // or provider.
-  if (/^(💾|📦|🔍)/.test(lines[0])) return false;
-  return /1080p|720p|480p|1080i|BluRay|WEB-DL|WEBRip|HDRip|HDTV|Remux|x264|x265|AVC|HEVC|10-Bit|CAM/.test(lines[0]);
-}), 'first line is always the res/source/encode (or CAM) line');
+  // Flags live ONLY on the audio line (🎧 codec line or a bare 🌐 line).
+  return lines.every((l) => !FLAG_RE.test(l) || /^(🎧|🌐)/.test(l));
+}), 'flags appear only on the audio line');
+check(outputs.every((o) => /^🎬 /.test(o.description.split('\n')[0])),
+  'first line is always the 🎬 title line');
+check(outputs.every((o) => o.description.split('\n').length === 6),
+  'exactly 6 description lines on every corpus fixture (line 2/3 drop only when their signal is missing — see §7)');
 check(outputs.every((o) => o.description.split('\n').every((l) =>
-  /^(💾 |📦 |🔍 )/.test(l)
-  || /1080p|720p|480p|1080i|BluRay|WEB-DL|WEBRip|HDRip|HDTV|Remux|x264|x265|AVC|HEVC|10-Bit|CAM/.test(l)
-  || /^(Atmos|TrueHD|DTS-HD MA|DTS|DD\+|DD|AAC|FLAC|Opus|AC3|EAC3|\d\.\d|🇮🇳|🇬🇧|🇷🇺|🇰🇷|🇯🇵|🇨🇳|🇪🇸|🇫🇷|🇩🇪|🇹🇭|🇻🇳)/.test(l))),
-  'every description line matches a compact shape (res / audio / size / group / provider)');
-
+  /^(🎬 |📹 |🎧 |🌐 |📦 |🏷️ |⚡ Ready \(..\) 🔍 |🔍 )/.test(l))),
+  'every description line matches the blueprint shape');
 // ---------------------------------------------------------------------------
 // 6. Compact-format extractors (v1.1.4) + synthetic Comet rows
 // ---------------------------------------------------------------------------
@@ -227,24 +223,21 @@ eq(parseReady('Ready (Real-Debrid)'), 'RD', 'Ready (Real-Debrid) normalises to R
 eq(parseReady('NOGRP DebridAccount|torbox'), null, 'Comet-internal junk is not Ready');
 eq(parseReady('Movie 2026 1080p BluRay'), null, 'no Ready token -> null');
 
-// Synthetic Comet rows shaped from basant's Reacher S4E2 screenshot
-// (no live Comet payload exists to test against — Comet is 403 from
-// this VM, so these prove the extractor + formatter, not the wire).
 console.log('\n=== 6b. Synthetic Comet rows (screenshot shape) ===');
 const cometRows = [
   {
     infoHash: 'cc0000000000000000000000000000000000000001',
     behaviorHints: { filename: 'Reacher.S04E02.Cage.Fight.1080p.BluRay.REMUX.AVC.DTS-HD.MA.5.1-Preacher.mkv' },
-    title: 'Reacher S04E02 Cage Fight 1080p BluRay REMUX AVC DTS-HD MA 5.1-Preacher\n👤 12 💾 8.5 GB ⏱ 41m:22s\n🇬🇧\n⚡ Ready (TB)',
+    title: 'Reacher S04E02 Cage Fight 1080p BluRay REMUX AVC DTS-HD MA 5.1-Preacher\n👤 12 💾 8.5 GB ⏱ 41m:22s\n🇬🇧\n⚡ Ready (TB)\nDebridAccount|torbox',
   },
   {
     infoHash: 'cc0000000000000000000000000000000000000002',
     behaviorHints: { filename: 'Reacher.S04E02.Cage.Fight.1080p.WEB-DL.DDP5.1.H.264-FRQC.mkv' },
-    title: 'Reacher S04E02 Cage Fight 1080p WEB-DL DDP5.1 H.264-FRQC\n👤 8 💾 4.01 GB ⏱ 43m:11s\n🇬🇧\n⚡ Ready (RD)',
+    title: 'Reacher S04E02 Cage Fight 1080p WEB-DL DDP5.1 H.264-FRQC\n👤 8 💾 4.01 GB ⏱ 43m:11s\n🇬🇧\n⚡ Ready (RD)\nDebridAccount|torbox',
   },
   {
-    // Torrentio-shaped row: no duration, no Ready, no group — those
-    // lines must simply be absent, never invented.
+    // Torrentio-shaped row: no duration, no Ready, no group, no debrid —
+    // those parts must simply be absent, never invented.
     infoHash: 'cc0000000000000000000000000000000000000003',
     behaviorHints: { filename: 'Reacher.S04E02.1080p.WEB-DL.x264.AAC.mkv' },
     title: 'Reacher S04E02 1080p WEB-DL x264 AAC\n👤 30 💾 2.2 GB\n🇬🇧',
@@ -253,16 +246,69 @@ const cometRows = [
 const comet = processSourceStreams('comet', cometRows);
 eq(comet.kept.length, 3, 'all 3 synthetic Comet rows kept');
 const cometOut = comet.kept.map(formatStream);
-const byGroup = (g) => cometOut.find((o) => o.description.includes(`📦 ${g}`));
+const byGroup = (g) => cometOut.find((o) => o.description.includes(`🏷️ ${g}`));
+eq(byGroup('Preacher').name, '🚀 FHD', 'Comet Preacher row: FHD header');
 eq(byGroup('Preacher').description,
-  '1080p | BluRay Remux AVC ⏱ 41m:22s\nDTS-HD MA 5.1 🇬🇧\n💾 8.5 GB\n📦 Preacher\n🔍 Comet ⚡ Ready (TB)',
-  'Comet Preacher row: exact compact output (the brief example)');
+  '🎬 Reacher 🍂 S04 🎞️ E02\n📹 BluRay Remux 🎞️ AVC ⏱️ 41m:22s\n🎧 DTS-HD MA 🔊 5.1 🌐 🇬🇧\n📦 8.5 GB 📊 27.4 Mbps\n🏷️ Preacher 💎 DebridAccount|torbox\n⚡ Ready (TB) 🔍 Comet',
+  'Comet Preacher row: exact blueprint output (the brief example; bitrate 8.5 GB / 41m22s = 27.4 Mbps)');
 eq(byGroup('FRQC').description,
-  '1080p | WEB-DL x264 ⏱ 43m:11s\nDD+ 5.1 🇬🇧\n💾 4.01 GB\n📦 FRQC\n🔍 Comet ⚡ Ready (RD)',
-  'Comet FRQC row: exact compact output (H.264 -> x264)');
-const plain = cometOut.find((o) => !/📦|⏱|Ready/.test(o.description));
-eq(plain.description, '1080p | WEB-DL x264\nAAC 🇬🇧\n💾 2.2 GB\n🔍 Comet',
-  'row without duration/Ready/group omits those lines');
+  '🎬 Reacher 🍂 S04 🎞️ E02\n📹 WEB-DL 🎞️ x264 ⏱️ 43m:11s\n🎧 DD+ 🔊 5.1 🌐 🇬🇧\n📦 4.01 GB 📊 12.4 Mbps\n🏷️ FRQC 💎 DebridAccount|torbox\n⚡ Ready (RD) 🔍 Comet',
+  'Comet FRQC row: exact blueprint output (H.264 -> x264; bitrate 4.01 GB / 43m11s = 12.4 Mbps)');
+const plain = cometOut.find((o) => o.description.includes('🏷️ NOGRP') && !/⏱|Ready/.test(o.description));
+eq(plain.description, '🎬 Reacher 🍂 S04 🎞️ E02\n📹 WEB-DL 🎞️ x264\n🎧 AAC 🌐 🇬🇧\n📦 2.2 GB\n🏷️ NOGRP\n🔍 Comet',
+  'row without duration/Ready/group/debrid omits those parts (NOGRP + plain 🔍 only)');
+
+// ---------------------------------------------------------------------------
+// 7. Blueprint helpers (v1.1.5): base title, debrid, duration, bitrate,
+//    name headers, season/episode threading
+// ---------------------------------------------------------------------------
+console.log('\n=== 7. Blueprint helpers ===');
+eq(extractBaseTitle('Jailer 2 (2026) 1080p Telugu HQ HDRip - HEVC'), 'Jailer 2 (2026)', 'base title keeps the year, drops the rest');
+eq(extractBaseTitle('Mirzapur 2018 S01E01 1080p WEB-DL'), 'Mirzapur (2018)', 'base title drops the SxxExx tag');
+eq(extractBaseTitle('Reacher (2022) S04E02 Cage Fight 1080p BluRay'), 'Reacher (2022)', 'base title: Reacher (2022)');
+eq(extractBaseTitle('Some Movie 1080p BluRay x264'), 'Some Movie', 'base title without year');
+eq(extractBaseTitle(''), '', 'base title: empty in, empty out');
+
+eq(parseDebridProvider('NOGRP DebridAccount|torbox'), 'DebridAccount|torbox', 'DebridAccount token kept as-is');
+eq(parseDebridProvider('⚡ Ready (TB) 🔍 Comet'), null, 'no DebridAccount token -> null');
+eq(parseDebridProvider('FRQC dmm_hashlist'), null, '"dmm_hashlist" is junk, never shown');
+eq(parseDebridProvider('Movie 2026 1080p BluRay'), null, 'plain title -> null');
+
+eq(durationSeconds('41m:22s'), 2482, '41m:22s -> 2482s');
+eq(durationSeconds('1h 23m'), 4980, '1h 23m -> 4980s');
+eq(durationSeconds('2h 22m'), 8520, '2h 22m -> 8520s');
+eq(durationSeconds(null), null, 'no duration -> null');
+
+// Name headers + season/episode threading on minimal parsed objects.
+function miniParsed(over = {}) {
+  return {
+    raw: {}, resolution: 1080, displayTitle: 'Movie (2026)',
+    langs: new Set(['english']), audioLangs: new Set(['english']),
+    audio: [], visual: [], encode: [], size: null,
+    source: 'torrentio', group: null, duration: null, ready: null, debrid: null,
+    ...over,
+  };
+}
+eq(formatStream(miniParsed({ resolution: 2160 })).name, '🔥 4K', '2160p header is 🔥 4K (mapping exists even though the cap drops 2160p)');
+eq(formatStream(miniParsed({ resolution: 1080 })).name, '🚀 FHD', '1080p header is 🚀 FHD');
+eq(formatStream(miniParsed({ resolution: 720 })).name, '⚡ HD', '720p header is ⚡ HD');
+eq(formatStream(miniParsed({ resolution: 480 })).name, '💿 SD', '480p header is 💿 SD');
+eq(formatStream(miniParsed({ resolution: null })).name, 'Movie (2026)', 'unknown resolution falls back to the display title');
+const seRow = miniParsed({ displayTitle: 'Reacher (2022) S01E01 Cage Fight 1080p WEB-DL', resolution: 1080 });
+eq(formatStream(seRow, { season: 4, episode: 2 }).description.split('\n')[0],
+  '🎬 Reacher (2022) 🍂 S04 🎞️ E02', 'opts season/episode (request id) win over the filename tag');
+eq(formatStream(seRow).description.split('\n')[0],
+  '🎬 Reacher (2022) 🍂 S01 🎞️ E01', 'without opts, the filename SxxExx tag is the fallback');
+eq(formatStream(miniParsed({ displayTitle: 'Jailer 2 (2026) 1080p HDRip' })).description.split('\n')[0],
+  '🎬 Jailer 2 (2026)', 'movies get no 🍂/🎞️ part');
+const noAudio = miniParsed({
+  audioLangs: new Set(), langs: new Set(), audio: [],
+  visual: ['WEB-DL'], encode: ['x264'], size: { value: 2.2, unit: 'GB' },
+});
+eq(formatStream(noAudio).description.split('\n').length, 5,
+  'no audio signal at all -> the audio line drops (5 lines, never an empty 🎧 line)');
 
 console.log(`\nRESULT: ${fail === 0 ? 'ALL CHECKS PASS' : fail + ' CHECK(S) FAILED'}`);
 process.exit(fail === 0 ? 0 : 1);
+
+
