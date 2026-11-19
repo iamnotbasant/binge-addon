@@ -170,15 +170,15 @@ function stubFetchFactory(searchResults, imdbMap, failIds = []) {
   // ---------------------------------------------------------------------------
   console.log('=== 3. Manifest (search extra) ===');
   {
-    eq(MANIFEST.version, '1.3.4', 'manifest version 1.3.4');
-    eq(catalogs().length, 30, '30 catalogs');
+    eq(MANIFEST.version, '1.4.3', 'manifest version 1.4.3');
+    eq(catalogs().length, 29, '29 catalogs');
     check(catalogs().every((c) => Array.isArray(c.extra) && c.extra.length === 1
       && c.extra[0].name === 'search' && c.extra[0].isRequired === false),
-    'ALL 30 catalogs carry extra [{ name: "search", isRequired: false }]');
+    'ALL 29 catalogs carry extra [{ name: "search", isRequired: false }]');
     const bytes = Buffer.byteLength(JSON.stringify(MANIFEST));
     check(bytes < 8192, `manifest stringifies to ${bytes} bytes (< 8 KB)`);
     const eff = effectiveCatalogs(defaultConfig());
-    eq(eff.length, 30, 'effectiveCatalogs (served manifest path) still 30');
+    eq(eff.length, 29, 'effectiveCatalogs (served manifest path) still 29');
     check(eff.every((c) => c.extra && c.extra[0].name === 'search' && c.extra[0].isRequired === false),
       'effectiveCatalogs carries the search extra through (not stripped)');
   }

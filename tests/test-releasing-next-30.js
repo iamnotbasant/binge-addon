@@ -38,7 +38,7 @@ const daysStr = (n) => new Date(Date.now() + n * DAY).toISOString().slice(0, 10)
 console.log('=== 0. Manifest ===');
 {
   const list = catalogs();
-  eq(list.length, 30, '30 catalogs (28 + 2 buzz)');
+  eq(list.length, 29, '29 catalogs (27 + 2 buzz)');
   check(list.some((c) => c.id === 'releasing-next-30-days-movie'), 'releasing-next-30-days-movie present');
   check(list.some((c) => c.id === 'releasing-next-30-days-series'), 'releasing-next-30-days-series present');
 }

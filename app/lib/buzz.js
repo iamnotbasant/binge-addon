@@ -10,11 +10,15 @@
 // "India Buzzing Now" (movie + series).
 //
 // X/Twitter is EXCLUDED by design (its API is paid, $100+/month) —
-// never attempted. Reddit is 403-blocked from this dev VM (datacenter
-// IP reputation) — the fetcher treats it as a normal per-source
-// failure: the row still fills from YouTube + News, and the source
-// status is recorded in stats (it may or may not answer from Vercel's
-// egress IPs; the rebuild never fails over it).
+// never attempted. Reddit is 403-blocked from Vercel's datacenter IPs
+// on unauthenticated .json — v1.4.3 adds client_credentials OAuth
+// (REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET env vars, oauth.reddit.com)
+// with graceful fallback: no creds, or a failed token call, and the
+// fetcher uses the public .json path exactly as before (or skips
+// Reddit entirely on a 403). The build never crashes over Reddit; the
+// per-source status records which path was used. The keys are never
+// stored anywhere — the user creates a Reddit "script" app and adds
+// them to the Vercel env vars himself; until then the fallback runs.
 //
 // Honest rule (basant was told this): buzz does not always mean good —
 // a title can trend because of controversy. So a buzzed title only
@@ -60,7 +64,72 @@ async function fetchText(url, fetchImpl, timeoutMs) {
   }
 }
 
-// --- Reddit (public JSON, no key) ---
+// --- Reddit (OAuth when creds exist, public JSON otherwise) ---
+// v1.4.3: client_credentials OAuth against oauth.reddit.com. The token
+// is fetched once per rebuild (not per subreddit) and is never logged
+// or stored — it lives only in this function's scope. Any failure
+// (no creds, token 4xx, oauth 403) falls back to the public .json
+// path, exactly as before; a dead source never fails the rebuild.
+async function fetchRedditToken(fetchImpl) {
+  const id = process.env.REDDIT_CLIENT_ID;
+  const secret = process.env.REDDIT_CLIENT_SECRET;
+  if (!id || !secret) return null;
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const res = await fetchImpl('https://www.reddit.com/api/v1/access_token', {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${id}:${secret}`).toString('base64')}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': BUZZ_UA,
+        },
+        body: 'grant_type=client_credentials',
+        signal: ctrl.signal,
+      });
+      if (!res.ok) return null;
+      const json = await res.json();
+      return json && typeof json.access_token === 'string' ? json.access_token : null;
+    } finally {
+      clearTimeout(t);
+    }
+  } catch (e) {
+    return null;
+  }
+}
+
+async function fetchRedditSub(sub, fetchImpl, token) {
+  const parse = (text) => {
+    try { return { ok: true, items: parseRedditHot(JSON.parse(text), sub) }; }
+    catch (e) { return { ok: false, error: 'bad json' }; }
+  };
+  if (token) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const res = await fetchImpl(`https://oauth.reddit.com/r/${sub}/hot?limit=25`, {
+        headers: { Authorization: `Bearer ${token}`, 'User-Agent': BUZZ_UA },
+        signal: ctrl.signal,
+      });
+      if (res.ok) {
+        const r = parse(await res.text());
+        if (r.ok) return { ...r, auth: 'oauth' };
+      }
+      // OAuth call failed or unparseable — fall through to the public
+      // path below.
+    } catch (e) {
+      // Network/abort — fall through to the public path below.
+    } finally {
+      clearTimeout(t);
+    }
+  }
+  const r = await fetchText(`https://www.reddit.com/r/${sub}/hot.json?limit=25`, fetchImpl);
+  if (!r.ok) return { ok: false, error: r.error, auth: 'public' };
+  const parsed = parse(r.text);
+  return parsed.ok ? { ...parsed, auth: 'public' } : { ok: false, error: parsed.error, auth: 'public' };
+}
+
 // Keeps posts with real discussion (score >= 25 or >= 15 comments) —
 // the LLM ranks them; the filter only cuts the long tail of noise.
 function parseRedditHot(json, sub) {
@@ -80,16 +149,12 @@ function parseRedditHot(json, sub) {
 async function fetchReddit(fetchImpl) {
   const status = {};
   const items = [];
+  const token = await fetchRedditToken(fetchImpl);
   await Promise.all(REDDIT_SUBS.map(async (sub) => {
-    const r = await fetchText(`https://www.reddit.com/r/${sub}/hot.json?limit=25`, fetchImpl);
-    if (!r.ok) { status[sub] = { ok: false, error: r.error }; return; }
-    try {
-      const got = parseRedditHot(JSON.parse(r.text), sub);
-      status[sub] = { ok: true, count: got.length };
-      items.push(...got);
-    } catch (e) {
-      status[sub] = { ok: false, error: 'bad json' };
-    }
+    const r = await fetchRedditSub(sub, fetchImpl, token);
+    if (!r.ok) { status[sub] = { ok: false, error: r.error, auth: r.auth }; return; }
+    status[sub] = { ok: true, count: r.items.length, auth: r.auth };
+    items.push(...r.items);
   }));
   return { items, status };
 }
@@ -353,7 +418,7 @@ function buzzFloorPass(item, floor, today) {
 
 module.exports = {
   GROQ_MODEL, BUZZ_MAX_RANKED, REDDIT_SUBS, YOUTUBE_QUERIES, NEWS_QUERIES,
-  fetchBuzzItems, fetchReddit, fetchYouTube, fetchNews,
+  fetchBuzzItems, fetchReddit, fetchRedditToken, fetchYouTube, fetchNews,
   parseRedditHot, parseYouTubeSearch, extractYtInitialData, parseNewsRss,
   groqAnalyze, parseGroqResponse, normalizeTitle, matchTmdbTitle, buzzFloorPass,
 };

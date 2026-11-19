@@ -31,7 +31,7 @@ const daysAgoStr = (n) => new Date(Date.now() - n * DAY).toISOString().slice(0, 
 console.log('=== 0. Manifest ===');
 {
   const list = catalogs();
-  eq(list.length, 30, '30 catalogs (28 + 2 buzz)');
+  eq(list.length, 29, '29 catalogs (27 + 2 buzz)');
   eq(list[0].id, 'trending-indian-movie', 'row 1 = Trending in India movie');
   eq(list[1].id, 'trending-indian-series', 'row 2 = Trending in India series');
   eq(list[2].id, 'new-releases-movie', 'row 3 = New Releases movie (directly under Trending India)');
@@ -150,6 +150,8 @@ function seriesDetail(item) {
   const detail = {
     id: item.id, name: item.name, type: 'Scripted',
     number_of_episodes: 12, networks: [], status: 'Ended',
+    origin_country: item.origin_country || [],
+    genres: [],
     external_ids: { imdb_id: item.imdb || null },
   };
   if (item.id === 601) detail.type = 'Talk Show';

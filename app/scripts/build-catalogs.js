@@ -23,6 +23,16 @@
 // Canceled/Pilot) — the announcement rows use Planned + In Production.
 // TMDB cannot verify IMAX/4K for the Visual Spectacles row — it is a
 // genre + rating proxy, and the name stays as basant wants it.
+//
+// v1.4.3 (19 Nov 2026): 9 user-requested changes — underrated bands
+// (movie 50-800 / series 25-300, va 7.5/7.6, movies runtime>=80),
+// Action floor 3000 + 4-slot Indian reserve, Anime genres 16+10759
+// with Kids/Family/Romance out + episode cap scoped to IN/Soap,
+// OTT Ready watch-provider filter (IN flatrate), Thriller keywords,
+// Reddit OAuth (buzz.js), dynamic Big Announcements year, upcoming
+// rows to the bottom, Newly Announced Web Series removed. Every
+// band/floor below is the user's exact spec — do not "improve" the
+// numbers without his word.
 
 'use strict';
 
@@ -48,19 +58,20 @@ function isIndianTitle(item) {
 // --- TMDB genre ids (stable, per TMDB docs) ---
 // Movies: Sci-Fi 878, Adventure 12, Fantasy 14, Action 28, Crime 80,
 // Thriller 53, Mystery 9648.
-// TV: Sci-Fi & Fantasy 10765, Animation 16, Crime 80, Mystery 9648.
+// TV: Sci-Fi & Fantasy 10765, Animation 16, Crime 80, Mystery 9648,
+// Action & Adventure 10759, Family 10751, Kids 10762, Romance 10749,
+// Soap 10766.
 // NOTE: TMDB has NO Thriller genre for TV — the series side of the
 // psychological-thrillers row uses Mystery + Crime instead (see §19/20).
 const GENRE_MOVIE = { scifi: 878, adventure: 12, fantasy: 14, action: 28, crime: 80, thriller: 53, mystery: 9648 };
-const GENRE_TV = { scifiFantasy: 10765, animation: 16, crime: 80, mystery: 9648 };
+const GENRE_TV = { scifiFantasy: 10765, animation: 16, crime: 80, mystery: 9648, actionAdventure: 10759, family: 10751, kids: 10762, romance: 10749, soap: 10766 };
 
 // --- v2.0 row windows / floors ---
 const FRESH_DIGITAL_DAYS = 45;      // #3 Fresh Digital Drops: digital release in last 45d
 const OTT_READY_DAYS = 90;          // #4 Latest Indian Movies - OTT Ready: digital in last 90d
 const LATEST_SERIES_DAYS = 90;      // #5 Latest Indian Web Series: first aired in last 90d
 const NEXT_30_DAYS = 30;            // #6 Releasing Next 30 Days
-const BIG_ANNOUNCE_DAYS = 500;      // #7 Big Announcements 2026-2027: release within 500d
-const NEW_SERIES_ANNOUNCE_DAYS = 365; // #8 Newly Announced Web Series: within 365d
+const BIG_ANNOUNCE_DAYS = 500;      // #7 Big Announcements: release within 500d
 const RETURNING_DAYS = 45;          // #9 New Season Returning Soon: next episode within 45d
 const THEATRES_DAYS = 45;           // #10 Now in Theatres (now_playing pages scanned)
 const THEATRES_MIN_VOTES = 10;      // #10 vote_count floor (v2.0.1: was 1000 —
@@ -68,9 +79,16 @@ const THEATRES_MIN_VOTES = 10;      // #10 vote_count floor (v2.0.1: was 1000 �
 // Jailer 2 40. Probed 18 Nov 2026: now_playing IN 5 pages, >=1000: 0
 // pass, >=100: 5, >=50: 7, >=10: 13. Floor 10 keeps the real
 // in-theatre titles and drops the 0-vote noise.)
-const UNDER_MIN_VOTE = 7.8;         // #13 Underrated Gems: vote_average floor
-const UNDER_MIN_VOTES = 2000;       // #13 vote_count floor (low end)
-const UNDER_MAX_VOTES = 25000;      // #13 vote_count ceiling (the "underrated" band)
+const UNDER_MIN_VOTE_MOVIE = 7.5;   // #13 Underrated Gems (movie): vote_average floor (v1.4.3: was 7.8 shared)
+const UNDER_MIN_VOTE_SERIES = 7.6;  // #13 Underrated Gems (series): vote_average floor (v1.4.3)
+const UNDER_MIN_VOTES_MOVIE = 50;   // #13 movie vote_count floor (v1.4.3: was 2000 —
+// Indian TMDB votes run far lower; the 2000 floor starved the live row
+// to 2/20 (DDLJ, 3 Idiots — famous, not underrated). The 50-800 band
+// is the user's exact spec: loved, but barely voted.)
+const UNDER_MAX_VOTES_MOVIE = 800;  // #13 movie vote_count ceiling (v1.4.3: was 25000)
+const UNDER_MIN_VOTES_SERIES = 25;  // #13 series vote_count floor (v1.4.3)
+const UNDER_MAX_VOTES_SERIES = 300; // #13 series vote_count ceiling (v1.4.3)
+const UNDER_MIN_RUNTIME_MOVIE = 80; // #13 movie with_runtime.gte (v1.4.3: kills shorts)
 const SCIFI_MIN_VOTE = 7.3;         // #19 Sci-Fi: vote_average floor
 const THRILLER_MIN_VOTE = 7.5;      // #20 Thrillers: vote_average floor
 const THRILLER_MIN_VOTES_MOVIE = 20000; // #20 movie vote_count floor (unchanged)
@@ -79,8 +97,14 @@ const THRILLER_MIN_VOTES_SERIES = 2000; // #20 series vote_count floor (v2.0.1:
 // title. Probed 18 Nov 2026: vc>=10000: 9, >=5000: 25, >=2000: 83;
 // 58/83 survive the v1.4 TV filter — Breaking Bad, Dexter, Sherlock,
 // True Detective, Peaky Blinders, Better Call Saul, The Wire, Fargo.)
-const ACTION_MIN_VOTE = 7;          // #21 Action: vote_average floor
-const ACTION_MIN_VOTES = 25000;     // #21 vote_count floor
+const ACTION_MIN_VOTE = 7.2;        // #21 Action: vote_average floor (v1.4.3: was 7)
+const ACTION_MIN_VOTES = 3000;      // #21 vote_count floor (v1.4.3: was 25000 —
+// the 25000 floor froze the live row on the same 19 famous titles;
+// John Wick, Mad Max, Vikram, Kill were all cut. Probed 18 Nov 2026:
+// the 25000 pool is ~19 titles; 3000 reopens it.)
+const ACTION_INDIAN_TARGET = 4;     // #21 Indian reserve slots (v1.4.3: same
+// Indian-reserve pattern as v1.3.1/v1.3.3 — 4 slots for Indian action)
+const ACTION_INDIAN_MIN_VOTES = 150; // #21 Indian-pass vote_count floor (v1.4.3)
 const MINI_MIN_VOTE = 7.8;          // #22 Mini-Series: vote_average floor
 const MINI_MIN_VOTES = 1000;        // #22 vote_count floor (v2.0.1: was 10000 —
 // pass-1 pool (with_type=2, va>=7.8) was 1 title. Probed 18 Nov 2026:
@@ -139,7 +163,7 @@ const BUZZ_MIN_VOTES = 10;    // v1.3.4 rated-path vote_count floor.
 // legacy file, so a removed row keeps serving stale data until its
 // legacy file is deleted. The rebuild prunes these (one del, only when
 // the file still exists — checked with a free HEAD first).
-const REMOVED_LEGACY_ROWS = ['south-blockbusters-movie'];
+const REMOVED_LEGACY_ROWS = ['south-blockbusters-movie', 'newly-announced-series-series'];
 
 // Detail-heavy rows (#3, #4, #7, #9) cap the number of detail calls:
 // 3 discover pages x 20 items = 60 candidates max per row. The cap is
@@ -151,6 +175,21 @@ const DETAIL_CANDIDATE_CAP = 60;
 // if the search endpoint cannot resolve a term, that term is dropped
 // and logged in stats.keywords.dropped (see resolveKeywords).
 const SCIFI_KEYWORD_TERMS = ['time travel', 'simulation', 'space', 'dystopia'];
+
+// #20 Thriller keywords (v1.4.3): same build-time resolution as #19.
+// Exact-name match only; an unresolvable term is dropped and logged in
+// stats.thrillerKeywords.dropped, never guessed.
+const THRILLER_KEYWORD_TERMS = ['psychological thriller', 'plot twist', 'mind game', 'serial killer', 'conspiracy'];
+
+// #4 OTT Ready watch providers (v1.4.3): TMDB provider ids for the
+// major Indian OTTs — Netflix 8, Prime Video 119, Disney+ Hotstar 122,
+// JioHotstar 2336, SonyLIV 237, Zee5 232. Netflix/Prime/JioHotstar/Zee5
+// verified against an independent TMDB-based source (19 Nov 2026);
+// SonyLIV/Disney+ Hotstar are the long-standing TMDB ids. Every build
+// re-validates them against TMDB's live provider list (see
+// resolveOttProviders) and drops any id TMDB no longer returns, so a
+// stale id can never 422 the discover call and kill the rebuild.
+const OTT_PROVIDERS = [8, 119, 122, 2336, 237, 232];
 
 // Statuses that count as "announced" (#7, #8). TMDB has no "Announced"
 // status — Planned is its equivalent (see header note).
@@ -172,10 +211,17 @@ const ANNOUNCED_STATUSES = ['Planned', 'In Production'];
 // them "Scripted", its default type (only the Talk Show dies by type):
 //   1. type in {Talk Show, Reality, News, Video} -> exclude. Keep
 //      Scripted, Miniseries, Documentary.
-//   2. number_of_episodes > TV_MAX_EPISODES (100) -> exclude. Biggest
-//      real web series probed is 56 (Charmsukh); smallest TV show probed
-//      is 474 (Kapil Sharma Show) — 100 sits between them with room on
-//      both sides.
+//   2. number_of_episodes > TV_MAX_EPISODES (100) -> exclude —
+//      v1.4.3 SCOPED: only when the title is Indian-origin
+//      (origin_country includes IN) or Soap-genre (10766). The cap was
+//      built for Indian daily soaps, but applied to every series row it
+//      also killed long anime (One Piece 1180 eps, Hunter x Hunter 148,
+//      My Hero Academia 170) and long Western series. Indian soaps
+//      stay excluded — the cap still fires for them, and the network
+//      blocklist below catches the short ones too. Biggest real web
+//      series probed is 56 (Charmsukh); smallest TV show probed is 474
+//      (Kapil Sharma Show) — 100 sits between them with room on both
+//      sides.
 //   3. broadcast-network blocklist (exact TMDB network names, spaces
 //      stripped + lowercased — TMDB writes "StarPlus" and "Star Plus"
 //      interchangeably). Catches short/finite broadcast series that slip
@@ -295,11 +341,26 @@ function normalizeNetworkName(name) {
 
 // Returns a short reason string when the TMDB /tv detail is a broadcast
 // TV show, else null. Series rows only; movies never call this.
+// v1.4.3: the episode cap is scoped to Indian-origin or Soap-genre
+// titles (see layer 2 above) — long anime and long Western series are
+// no longer killed by a filter built for Indian daily soaps.
 function tvShowExcludeReason(detail) {
   if (!detail) return null;
   if (TV_EXCLUDED_TYPES.has(detail.type)) return `type:${detail.type}`;
   const eps = detail.number_of_episodes;
-  if (typeof eps === 'number' && eps > TV_MAX_EPISODES) return `episodes:${eps}`;
+  if (typeof eps === 'number' && eps > TV_MAX_EPISODES) {
+    const countries = detail.origin_country || [];
+    const isSoap = (detail.genres || []).some((g) => g && g.id === GENRE_TV.soap);
+    // The cap fires for Indian-origin, Soap-genre, or UNKNOWN-origin
+    // titles (conservative default: a missing origin_country must
+    // never leak a daily soap in). It is skipped only when the title
+    // is KNOWN non-Indian and not Soap — long anime (One Piece,
+    // Hunter x Hunter) and long Western series. Real TMDB /tv details
+    // always carry origin_country, so the unknown branch only fires
+    // on incomplete data.
+    const knownNonIndian = countries.length > 0 && !countries.includes('IN');
+    if (!knownNonIndian || isSoap) return `episodes:${eps}`;
+  }
   const networks = detail.networks || [];
   for (const n of networks) {
     if (BROADCAST_NETWORKS.has(normalizeNetworkName(n.name))) {
@@ -454,20 +515,41 @@ function digitalReleaseDate(detail, from, to) {
 // Resolve each term via /search/keyword at build time. Takes the first
 // result whose name matches the term exactly (case-insensitive) —
 // search ranking can surface near-misses first. A term with no exact
-// match is DROPPED and recorded in stats.keywords.dropped, never
+// match is DROPPED and recorded in stats[statsKey].dropped, never
 // guessed. If every term drops, the row falls back to genre-only and
-// stats.keywords.allDropped is set (reported, not faked).
-async function resolveKeywords(key, stats) {
+// stats[statsKey].allDropped is set (reported, not faked).
+async function resolveKeywords(key, stats, terms, statsKey) {
   const resolved = {};
   const dropped = [];
-  for (const term of SCIFI_KEYWORD_TERMS) {
+  for (const term of terms) {
     const res = await tmdb('/search/keyword', key, { query: term, page: 1 });
     const hit = (res.results || []).find((r) => String(r.name || '').trim().toLowerCase() === term.toLowerCase());
     if (hit) resolved[term] = hit.id;
     else dropped.push(term);
   }
-  stats.keywords = { resolved, dropped, allDropped: Object.keys(resolved).length === 0 };
+  stats[statsKey] = { resolved, dropped, allDropped: Object.keys(resolved).length === 0 };
   return Object.values(resolved);
+}
+
+// v1.4.3: validate the #4 OTT provider ids against TMDB's live
+// /watch/providers/movie list for region IN (one call per build).
+// Returns the subset of OTT_PROVIDERS that TMDB still returns, or
+// null when the list cannot be fetched / nothing validates — the
+// caller then skips the provider filter entirely (date window +
+// digital detail check, as before) instead of risking a 422 that
+// would kill the whole rebuild. Never throws.
+async function resolveOttProviders(key, stats) {
+  try {
+    const res = await tmdb('/watch/providers/movie', key, { watch_region: 'IN' });
+    const live = new Set((res.results || []).map((p) => p.provider_id));
+    const valid = OTT_PROVIDERS.filter((id) => live.has(id));
+    const dropped = OTT_PROVIDERS.filter((id) => !live.has(id));
+    stats.ottProviders = { configured: [...OTT_PROVIDERS], valid, dropped };
+    return valid.length ? valid : null;
+  } catch (e) {
+    stats.ottProviders = { configured: [...OTT_PROVIDERS], valid: [], dropped: [...OTT_PROVIDERS], error: String((e && e.message) || e).slice(0, 80) };
+    return null;
+  }
 }
 
 async function buildRows(type, key, idMap, stats, ctx) {
@@ -482,12 +564,14 @@ async function buildRows(type, key, idMap, stats, ctx) {
   const latestSeriesDays = K('latest-indian-series', 'windowDays', LATEST_SERIES_DAYS);
   const nextDays = K('releasing-next-30-days', 'windowDays', NEXT_30_DAYS);
   const bigDays = K('big-announcements', 'windowDays', BIG_ANNOUNCE_DAYS);
-  const newSeriesDays = K('newly-announced-series', 'windowDays', NEW_SERIES_ANNOUNCE_DAYS);
   const retDays = K('returning-soon', 'windowDays', RETURNING_DAYS);
   const theatreVotes = K('now-in-theatres', 'voteCountFloor', THEATRES_MIN_VOTES);
-  const underVote = K('underrated-gems', 'voteFloor', UNDER_MIN_VOTE);
-  const underMinVotes = K('underrated-gems', 'voteCountFloor', UNDER_MIN_VOTES);
-  const underMaxVotes = K('underrated-gems', 'voteCountCeil', UNDER_MAX_VOTES);
+  // v1.4.3: underrated bands are split per type (shared knob fields
+  // cannot hold 7.5/7.6 and 50-800/25-300 at once) — see config.js.
+  // (isMovie is declared below; type is the parameter, so use it here.)
+  const underVote = K('underrated-gems', type === 'movie' ? 'voteFloorMovie' : 'voteFloorSeries', type === 'movie' ? UNDER_MIN_VOTE_MOVIE : UNDER_MIN_VOTE_SERIES);
+  const underMinVotes = K('underrated-gems', type === 'movie' ? 'voteCountFloorMovie' : 'voteCountFloorSeries', type === 'movie' ? UNDER_MIN_VOTES_MOVIE : UNDER_MIN_VOTES_SERIES);
+  const underMaxVotes = K('underrated-gems', type === 'movie' ? 'voteCountCeilMovie' : 'voteCountCeilSeries', type === 'movie' ? UNDER_MAX_VOTES_MOVIE : UNDER_MAX_VOTES_SERIES);
   const scifiVote = K('scifi-time-travel', 'voteFloor', SCIFI_MIN_VOTE);
   const thrillVote = K('psychological-thrillers', 'voteFloor', THRILLER_MIN_VOTE);
   const thrillVotesMovie = K('psychological-thrillers', 'voteCountFloor', THRILLER_MIN_VOTES_MOVIE);
@@ -495,6 +579,7 @@ async function buildRows(type, key, idMap, stats, ctx) {
   // (thriller series shares the row's voteCountFloor knob; default above is the series floor)
   const actionVote = K('action-heist-revenge', 'voteFloor', ACTION_MIN_VOTE);
   const actionVotes = K('action-heist-revenge', 'voteCountFloor', ACTION_MIN_VOTES);
+  const actionVotesIndian = K('action-heist-revenge', 'voteCountFloorIndian', ACTION_INDIAN_MIN_VOTES);
   const miniVote = K('one-season-miniseries', 'voteFloor', MINI_MIN_VOTE);
   const miniVotes = K('one-season-miniseries', 'voteCountFloor', MINI_MIN_VOTES);
   const visualVote = K('visual-spectacles', 'voteFloor', VISUAL_MIN_VOTE);
@@ -786,15 +871,32 @@ async function buildRows(type, key, idMap, stats, ctx) {
     // digital detail check as #3 (type 4, any country, in window).
     // Discover: origin IN + primary_release_date window, sort
     // primary_release_date.desc. Scan up to 3 pages (60 detail max).
+    // v1.4.3: the discover ALSO requires an actual OTT presence —
+    // watch_region=IN + with_watch_monetization_types=flatrate +
+    // with_watch_providers (major Indian OTTs, validated live per
+    // build — see resolveOttProviders). Before this the row only
+    // checked the release DATE, so a film still only in theatres
+    // could appear here with no streams. The 90-day window stays, so
+    // the row stays "latest". When validation fails, the provider
+    // filter is skipped (date + digital check only) — never fatal.
     const ottFrom = isoDate(daysFromNow(-ottDays));
+    const ottProviders = await resolveOttProviders(key, stats);
+    const ottDiscoverParams = {
+      sort_by: 'primary_release_date.desc',
+      with_origin_country: 'IN',
+      'primary_release_date.lte': todayStr,
+      'primary_release_date.gte': ottFrom,
+    };
+    if (ottProviders) {
+      ottDiscoverParams.watch_region = 'IN';
+      ottDiscoverParams.with_watch_monetization_types = 'flatrate';
+      ottDiscoverParams.with_watch_providers = ottProviders.join('|');
+    }
     const ottKept = [];
     const seenOtt = new Set();
     for (let p = 1; p <= 3 && ottKept.length < ROW_CAP; p++) {
       const page = await tmdb('/discover/movie', key, {
-        sort_by: 'primary_release_date.desc',
-        with_origin_country: 'IN',
-        'primary_release_date.lte': todayStr,
-        'primary_release_date.gte': ottFrom,
+        ...ottDiscoverParams,
         page: p,
       });
       const kept = await addMovieDetailPage(page.results || [], seenOtt, key, idMap, movieCache, stats,
@@ -826,15 +928,44 @@ async function buildRows(type, key, idMap, stats, ctx) {
     }
     rows['now-in-theatres'] = theatreMetas;
 
-    // --- #21 Adrenaline Action, Heist & Revenge (movie): genres
-    // Action/Crime, vote_average>=7, vote_count>=25000, sort
-    // popularity.desc.
-    rows['action-heist-revenge'] = await collectDiscoverRow('/discover/movie', {
-      sort_by: 'popularity.desc',
-      with_genres: `${GENRE_MOVIE.action}|${GENRE_MOVIE.crime}`,
-      'vote_average.gte': actionVote,
-      'vote_count.gte': actionVotes,
-    }, ROW_CAP, 2, type, key, idMap, movieCache, stats);
+    // --- #21 Action, Heist & Revenge (movie): genres Action/Crime,
+    // vote_average>=7.2, vote_count>=3000, sort popularity.desc.
+    // v1.4.3: the 25000 floor froze the live row on the same 19 famous
+    // titles (3000 reopens it: John Wick, Mad Max...). Two passes, the
+    // v1.3.1/v1.3.3 Indian-reserve pattern: up to 4 Indian-action
+    // titles first (origin IN, vote_count>=150 — Indian action like
+    // Vikram, Kill, Kaithi sits far below the global floor), then the
+    // worldwide pool (skipping Indian-origin titles so nothing
+    // double-counts) fills the row to 20. Both passes popularity.desc.
+    const actionMetas = [];
+    const seenAction = new Set();
+    async function actionPass(wantIndian, target) {
+      const got = [];
+      for (let p = 1; p <= 2 && got.length < target; p++) {
+        const page = await tmdb('/discover/movie', key, {
+          sort_by: 'popularity.desc',
+          with_genres: `${GENRE_MOVIE.action}|${GENRE_MOVIE.crime}`,
+          'vote_average.gte': actionVote,
+          'vote_count.gte': wantIndian ? actionVotesIndian : actionVotes,
+          ...(wantIndian ? { with_origin_country: 'IN' } : {}),
+          page: p,
+        });
+        for (const item of page.results || []) {
+          if (got.length >= target) break;
+          if (seenAction.has(item.id)) continue;
+          seenAction.add(item.id);
+          if (!wantIndian && isIndianTitle(item)) continue;
+          const imdbId = await resolveImdb(type, item.id, key, idMap);
+          if (!imdbId) { stats.excludedNoImdb++; continue; }
+          got.push(toMeta(item, type, imdbId));
+        }
+      }
+      return got;
+    }
+    const actionIndian = await actionPass(true, ACTION_INDIAN_TARGET);
+    const actionGlobal = await actionPass(false, ROW_CAP - actionIndian.length);
+    stats.actionHeist = { total: actionIndian.length + actionGlobal.length, indian: actionIndian.length, worldwide: actionGlobal.length };
+    rows['action-heist-revenge'] = [...actionIndian, ...actionGlobal].slice(0, ROW_CAP);
 
     // --- #23 4K IMAX Visual Spectacles (movie): genres
     // Sci-Fi/Adventure/Fantasy, vote_average>=7.5, after 2015, sort
@@ -880,18 +1011,12 @@ async function buildRows(type, key, idMap, stats, ctx) {
       'first_air_date.gte': seriesFrom,
     }, ROW_CAP, SERIES_REFILL_PAGES_STANDARD, type, key, idMap, seriesCache, stats);
 
-    // --- #8 Newly Announced Web Series (series): TV, status Planned /
-    // In Production, first_air_date within next 365 days, sort
-    // popularity.desc. Discover filters by status directly
-    // (with_status: 1=Planned, 2=In Production); the detail check
-    // verifies status again + the v1.4 TV filter. Scan up to 3 pages.
-    rows['newly-announced-series'] = await collectDiscoverRow('/discover/tv', {
-      sort_by: 'popularity.desc',
-      with_status: '1|2',
-      'first_air_date.gte': todayStr,
-      'first_air_date.lte': isoDate(daysFromNow(newSeriesDays)),
-    }, ROW_CAP, 3, type, key, idMap, seriesCache, stats,
-    (detail) => ANNOUNCED_STATUSES.includes(detail.status));
+    // --- #8 Newly Announced Web Series: REMOVED in v1.4.3 — it was a
+    // near-duplicate of Big Announcements Series (same with_status=1|2
+    // filter, only the window differed: 365d vs 500d). The row is gone
+    // from the builder, the manifest, the config knob and the admin
+    // labels; its frozen legacy Blob file is pruned via
+    // REMOVED_LEGACY_ROWS ('newly-announced-series-series').
 
     // --- #9 New Season Returning Soon (series): TV, status Returning
     // Series, next_episode_to_air within 45 days, sort by next air
@@ -977,18 +1102,24 @@ async function buildRows(type, key, idMap, stats, ctx) {
     }
     rows['one-season-miniseries'] = miniMetas;
 
-    // --- #24 Top Action & Dark Anime (series): genre Animation,
-    // origin JP, vote_average>=8, vote_count>=1000 (v2.0.1: was
-    // 10000 — pool was 0), sort vote_average.desc (v2.0.1: was
-    // popularity.desc — popularity order is full of long serials the
-    // cap kills before the row ever reaches a keeper; rating order
-    // puts the qualifying anime first). Scan up to 20 pages (v2.0.1:
-    // was 10). WITH the v1.4 TV-show filter. HONEST NOTE: the
-    // 100-episode cap excludes long-running anime (One Piece etc.) —
-    // that is the v1.4 filter working as designed, not a bug.
+    // --- #24 Top Action & Dark Anime (series): genres Animation AND
+    // Action & Adventure, origin JP, vote_average>=8, vote_count>=1000
+    // (v2.0.1: was 10000 — pool was 0), sort vote_average.desc
+    // (v2.0.1: was popularity.desc — popularity order is full of long
+    // serials the cap kills before the row ever reaches a keeper;
+    // rating order puts the qualifying anime first). Scan up to 20
+    // pages (v2.0.1: was 10). WITH the v1.4 TV-show filter.
+    // v1.4.3: genre was Animation-only, so ~6/20 live titles were
+    // romance/sports/drama (Kamisama Kiss, Haikyu!!, Your Lie in
+    // April, Rascal, Horimiya, Violet Evergarden) — not action/dark.
+    // Now Animation AND Action & Adventure, with Kids/Family/Romance
+    // excluded. The 100-episode cap no longer kills long anime — it is
+    // scoped to Indian-origin / Soap titles (see tvShowExcludeReason),
+    // so One Piece, Hunter x Hunter (148 eps) and Naruto can enter.
     rows['action-anime'] = await collectDiscoverRow('/discover/tv', {
       sort_by: 'vote_average.desc',
-      with_genres: `${GENRE_TV.animation}`,
+      with_genres: `${GENRE_TV.animation},${GENRE_TV.actionAdventure}`,
+      without_genres: `${GENRE_TV.family},${GENRE_TV.kids},${GENRE_TV.romance}`,
       with_origin_country: 'JP',
       'vote_average.gte': animeVote,
       'vote_count.gte': animeVotes,
@@ -1184,8 +1315,11 @@ async function buildRows(type, key, idMap, stats, ctx) {
     rows['releasing-next-30-days'] = nextSliced.map((x) => x.meta);
   }
 
-  // --- #7 Big Announcements 2026-2027 (both): status Planned / In
+  // --- #7 Big Announcements (both): status Planned / In
   // Production, release within the next 500 days, sort popularity.
+  // v1.4.3: the display name year is dynamic (currentYear–nextYear,
+  // computed in lib/manifest.js + lib/config.js) — no hardcoded year
+  // in code, config or admin labels any more.
   // TMDB discover has NO status filter for movies — the movie side
   // filters by status via detail calls (one /movie/{id} call per
   // candidate, reused for the imdb id). The series side CAN filter in
@@ -1218,15 +1352,19 @@ async function buildRows(type, key, idMap, stats, ctx) {
     (detail) => ANNOUNCED_STATUSES.includes(detail.status));
   }
 
-  // --- #13 Underrated Indian Gems (both): Indian origin,
-  // vote_average>=7.8, vote_count 2000-25000 (the "underrated" band:
-  // loved, but not widely voted), sort vote_average desc.
+  // --- #13 Underrated Indian Gems (both): Indian origin, sort
+  // vote_average desc. v1.4.3 bands (user's exact spec): movies
+  // vote_average>=7.5, vote_count 50-800, runtime>=80 (kills shorts);
+  // series vote_average>=7.6, vote_count 25-300. The old shared band
+  // (7.8, 2000-25000) starved the live movie row to 2/20 — DDLJ and
+  // 3 Idiots, famous, not underrated.
   const underBase = {
     sort_by: 'vote_average.desc',
     with_origin_country: 'IN',
     'vote_average.gte': underVote,
     'vote_count.gte': underMinVotes,
     'vote_count.lte': underMaxVotes,
+    ...(isMovie ? { 'with_runtime.gte': UNDER_MIN_RUNTIME_MOVIE } : {}),
   };
   rows['underrated-gems'] = await collectDiscoverRow(path, underBase,
     ROW_CAP, isMovie ? 2 : SERIES_REFILL_PAGES_VOTE_FILTERED, type, key, idMap,
@@ -1252,13 +1390,17 @@ async function buildRows(type, key, idMap, stats, ctx) {
     ROW_CAP, isMovie ? 2 : SERIES_REFILL_PAGES_VOTE_FILTERED, type, key, idMap,
     isMovie ? movieCache : seriesCache, stats);
 
-  // --- #20 High-Tension Psychological Thrillers (both): genres
+  // --- #20 Psychological Thrillers (both): genres
   // Thriller/Mystery, vote_average>=7.5, sort popularity.desc. The
   // vote_count floor is split (v2.0.1): movie keeps 20000 (row was
   // 11/20, healthy), series uses 2000 (was 20000 — series pool was 1
   // title; see thrillVotesSeries). Series side: TMDB has no
   // Thriller TV genre, so Mystery + Crime (see genre note at the top
-  // of this file).
+  // of this file). v1.4.3: with_keywords added (same build-time
+  // resolution as the Sci-Fi row — see ctx.thrillerKeywordIds); a
+  // genre-only row pulls in plain crime dramas, the keywords keep it
+  // psychological. If NO keyword resolved, the row is genre-only
+  // (logged in stats.thrillerKeywords).
   const thrillBase = {
     sort_by: 'popularity.desc',
     with_genres: isMovie
@@ -1267,6 +1409,7 @@ async function buildRows(type, key, idMap, stats, ctx) {
     'vote_average.gte': thrillVote,
     'vote_count.gte': isMovie ? thrillVotesMovie : thrillVotesSeries,
   };
+  if (ctx.thrillerKeywordIds && ctx.thrillerKeywordIds.length) thrillBase.with_keywords = ctx.thrillerKeywordIds.join('|');
   rows['psychological-thrillers'] = await collectDiscoverRow(path, thrillBase,
     ROW_CAP, isMovie ? 2 : SERIES_REFILL_PAGES_VOTE_FILTERED, type, key, idMap,
     isMovie ? movieCache : seriesCache, stats);
@@ -1368,11 +1511,13 @@ async function main() {
   const cfg = await readConfig();
   const idMap = await readIdMap();
   // v2.0: per-run detail caches (series + movie) shared across rows, and
-  // the #19 Sci-Fi keyword ids resolved once, before any row builds.
+  // the #19 Sci-Fi + #20 Thriller keyword ids resolved once, before any
+  // row builds.
   const ctx = {
     seriesCache: new Map(),
     movieCache: new Map(),
-    keywordIds: await resolveKeywords(key, stats),
+    keywordIds: await resolveKeywords(key, stats, SCIFI_KEYWORD_TERMS, 'keywords'),
+    thrillerKeywordIds: await resolveKeywords(key, stats, THRILLER_KEYWORD_TERMS, 'thrillerKeywords'),
     config: cfg,
   };
   // v1.3.4: buzz is fetched + ranked once for the whole rebuild (never
@@ -1442,7 +1587,7 @@ async function main() {
   }
   const counts = Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, v.length]));
   console.log(`[build-catalogs] done. rows=${JSON.stringify(counts)} excludedNoImdb=${stats.excludedNoImdb} excludedTvShow=${JSON.stringify(stats.excludedTvShow)} keywords=${JSON.stringify(stats.keywords)} idMapSize=${Object.keys(idMap).length} bundleSkipped=${bundleResult.skipped} bundleHash=${bundleResult.hash.slice(0, 8)} prunedLegacy=${JSON.stringify(prunedLegacy)}`);
-  return { skipped: false, counts, excludedNoImdb: stats.excludedNoImdb, excludedTvShow: stats.excludedTvShow, keywords: stats.keywords, trendingTopUp: stats.trendingTopUp, newReleases: stats.newReleases, releasingNext30: stats.releasingNext30, buzz: stats.buzz, bundleSkipped: bundleResult.skipped, bundleHash: bundleResult.hash, prunedLegacy };
+  return { skipped: false, counts, excludedNoImdb: stats.excludedNoImdb, excludedTvShow: stats.excludedTvShow, keywords: stats.keywords, thrillerKeywords: stats.thrillerKeywords, ottProviders: stats.ottProviders, actionHeist: stats.actionHeist, trendingTopUp: stats.trendingTopUp, newReleases: stats.newReleases, releasingNext30: stats.releasingNext30, buzz: stats.buzz, bundleSkipped: bundleResult.skipped, bundleHash: bundleResult.hash, prunedLegacy };
 }
 
 if (require.main === module) {
@@ -1452,4 +1597,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main, buildRows, isIndianTitle, collectBuzz };
+module.exports = { main, buildRows, isIndianTitle, collectBuzz, resolveKeywords, resolveOttProviders, tvShowExcludeReason };

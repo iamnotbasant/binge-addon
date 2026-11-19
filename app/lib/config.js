@@ -29,15 +29,18 @@ function defaultConfig() {
       'latest-indian-series': { windowDays: 90 },
       'releasing-next-30-days': { windowDays: 30 },
       'big-announcements': { windowDays: 500 },
-      'newly-announced-series': { windowDays: 365 },
       'returning-soon': { windowDays: 45 },
       'now-in-theatres': { windowDays: 45, voteCountFloor: 10 },
       'new-releases': { windowDays: 45, voteFloor: 6.5, voteCountFloor: 100, voteCountFloorIndian: 10, voteCountFloorSeries: 25 },
       'india-buzzing-now': { voteFloor: 6, voteCountFloor: 10 },
-      'underrated-gems': { voteFloor: 7.8, voteCountFloor: 2000, voteCountCeil: 25000 },
+      // v1.4.3: underrated bands are split per type — a shared knob
+      // cannot hold movie 7.5/50-800 and series 7.6/25-300 at once.
+      // (The old shared fields voteFloor/voteCountFloor/voteCountCeil
+      // are gone; a stored config carrying them is ignored.)
+      'underrated-gems': { voteFloorMovie: 7.5, voteFloorSeries: 7.6, voteCountFloorMovie: 50, voteCountFloorSeries: 25, voteCountCeilMovie: 800, voteCountCeilSeries: 300 },
       'scifi-time-travel': { voteFloor: 7.3 },
       'psychological-thrillers': { voteFloor: 7.5 },
-      'action-heist-revenge': { voteFloor: 7, voteCountFloor: 25000 },
+      'action-heist-revenge': { voteFloor: 7.2, voteCountFloor: 3000, voteCountFloorIndian: 150 },
       'one-season-miniseries': { voteFloor: 7.8, voteCountFloor: 1000 },
       'visual-spectacles': { voteFloor: 7.5 },
       'action-anime': { voteFloor: 8, voteCountFloor: 1000 },
@@ -109,10 +112,17 @@ async function writeConfig(cfg) {
 // v1.1.7: `extra` (search) is carried through — dropping it here would
 // strip search from the served /manifest.json even though the static
 // MANIFEST declares it.
+// v1.4.3: Big Announcements shows a DYNAMIC year (currentYear–nextYear)
+// computed at serve time — a stored name with a stale year can never
+// freeze the label again. The override applies only to the two
+// big-announcements ids; every other row keeps its stored name.
 function effectiveCatalogs(cfg) {
+  const y = new Date().getFullYear();
+  const bigName = `Big Announcements ${y}–${y + 1}`;
   const list = defaultCatalogList().map((c) => {
     const o = (cfg.catalogs && cfg.catalogs[c.id]) || {};
-    return { type: c.type, id: c.id, name: o.name || c.name, extra: c.extra, enabled: o.enabled !== false, order: typeof o.order === 'number' ? o.order : 999 };
+    const name = c.id.startsWith('big-announcements-') ? bigName : (o.name || c.name);
+    return { type: c.type, id: c.id, name, extra: c.extra, enabled: o.enabled !== false, order: typeof o.order === 'number' ? o.order : 999 };
   });
   return list.filter((c) => c.enabled).sort((a, b) => a.order - b.order)
     .map(({ type, id, name, extra }) => ({ type, id, name, ...(extra ? { extra } : {}) }));

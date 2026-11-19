@@ -2,7 +2,7 @@
 // "kar bhai buzz wala system on bhai").
 //
 // Covers, with a stubbed fetch (no keys, no network):
-// (0) manifest — 30 catalogs, buzz rows right after new-releases
+// (0) manifest — 29 catalogs (v1.4.3: newly-announced removed), buzz rows right after new-releases
 //     (indices 4-5), config knob defaults voteFloor 6 / votes 10;
 // (1) Reddit parser — score/comment noise cut, bad shapes skipped;
 // (2) YouTube parser — ytInitialData brace-match + videoRenderer
@@ -46,14 +46,14 @@ const daysStr = (n) => new Date(Date.now() + n * DAY).toISOString().slice(0, 10)
   console.log('=== 0. Manifest + config ===');
   {
     const list = catalogs();
-    eq(list.length, 30, '30 catalogs (28 + 2 buzz rows)');
+    eq(list.length, 29, '29 catalogs (27 + 2 buzz rows)');
     eq(list[4].id, 'india-buzzing-now-movie', 'buzz movie row at index 4 (right after new-releases)');
     eq(list[5].id, 'india-buzzing-now-series', 'buzz series row at index 5');
     eq(list[4].name, 'India Buzzing Now', 'buzz row name');
     check(list[4].extra && list[4].extra[0].name === 'search', 'buzz rows searchable');
     const cfg = defaultConfig();
     eq(JSON.stringify(cfg.knobs['india-buzzing-now']), '{"voteFloor":6,"voteCountFloor":10}', 'buzz knob defaults');
-    eq(Object.keys(cfg.catalogs).length, 30, 'config carries 30 catalogs');
+    eq(Object.keys(cfg.catalogs).length, 29, 'config carries 29 catalogs');
   }
 
   // ---------------------------------------------------------------------------
