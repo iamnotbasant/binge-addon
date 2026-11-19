@@ -33,19 +33,9 @@ function defaultConfig() {
       'now-in-theatres': { windowDays: 45, voteCountFloor: 10 },
       'new-releases': { windowDays: 45, voteFloor: 6.5, voteCountFloor: 100, voteCountFloorIndian: 10, voteCountFloorSeries: 25 },
       'india-buzzing-now': { voteFloor: 6, voteCountFloor: 10 },
-      // v1.4.3: underrated bands are split per type — a shared knob
-      // cannot hold movie 7.5/50-800 and series 7.6/25-300 at once.
-      // (The old shared fields voteFloor/voteCountFloor/voteCountCeil
-      // are gone; a stored config carrying them is ignored.)
-      'underrated-gems': { voteFloorMovie: 7.5, voteFloorSeries: 7.6, voteCountFloorMovie: 50, voteCountFloorSeries: 25, voteCountCeilMovie: 800, voteCountCeilSeries: 300 },
-      'scifi-time-travel': { voteFloor: 7.3 },
-      'psychological-thrillers': { voteFloor: 7.5 },
-      'action-heist-revenge': { voteFloor: 7.2, voteCountFloor: 3000, voteCountFloorIndian: 150 },
-      'one-season-miniseries': { voteFloor: 7.8, voteCountFloor: 1000 },
-      'visual-spectacles': { voteFloor: 7.5 },
-      'action-anime': { voteFloor: 8, voteCountFloor: 1000 },
-      'all-time-classics': { voteCountFloor: 10000 },
-      'dark-crime': { voteFloor: 7.2 },
+      // v1.5.5: the underrated / scifi / thrillers / action /
+      // miniseries / visual / anime / classics / dark-crime knobs are
+      // gone with their rows (12 removed catalogs).
     },
     streams: { torrentio: true, comet: true, hdhub: true, maxQuality: '1080p' },
   };

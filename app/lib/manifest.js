@@ -1,6 +1,8 @@
 // Binge Addon — manifest definition (design §6.1, §6.4).
-// 29 catalogs (v1.4.3 — was 30; Newly Announced Web Series removed as
-// a Big Announcements duplicate). Movie+series pairs adjacent, then
+// 17 catalogs (v1.5.5 — was 29; Dark Crime, Underrated Gems, Sci-Fi,
+// Psychological Thrillers, Action Heist & Revenge, 1-Season Binge,
+// Visual Spectacles, Action Anime and All-Time Classics removed
+// completely on basant's order). Movie+series pairs adjacent, then
 // watchable rows first and the upcoming/radar rows last (v1.4.3
 // reorder — Nuvio opens on watchable rows, not on titles with no
 // streams yet). Manifest must stringify < 8 KB.
@@ -47,27 +49,9 @@ function catalogs() {
   push('latest-indian-ott-movie', 'Latest Indian Movies — OTT Ready', 'movie');
   // #5 Latest Indian Web Series (series only)
   push('latest-indian-series-series', 'Latest Indian Web Series', 'series');
-  // #12 Indian Dark Crime & Thrillers (series only)
-  push('dark-crime-series', 'Indian Dark Crime & Thrillers', 'series');
-  // #13 Underrated Indian Gems
-  push('underrated-gems-movie', 'Underrated Indian Gems', 'movie');
-  push('underrated-gems-series', 'Underrated Indian Gems', 'series');
-  // #19 Mind-Bending Sci-Fi (v1.4.3: was "Mind-Bending Sci-Fi & Time Travel")
-  push('scifi-time-travel-movie', 'Mind-Bending Sci-Fi', 'movie');
-  push('scifi-time-travel-series', 'Mind-Bending Sci-Fi', 'series');
-  // #20 Psychological Thrillers (v1.4.3: was "High-Tension Psychological Thrillers")
-  push('psychological-thrillers-movie', 'Psychological Thrillers', 'movie');
-  push('psychological-thrillers-series', 'Psychological Thrillers', 'series');
-  // #21 Action, Heist & Revenge (v1.4.3: was "Adrenaline Action, Heist & Revenge")
-  push('action-heist-revenge-movie', 'Action, Heist & Revenge', 'movie');
-  // #22 1-Season Binge (v1.4.3: was "1-Season Binge Mini-Series")
-  push('one-season-miniseries-series', '1-Season Binge', 'series');
-  // #23 4K IMAX Visual Spectacles (movie only)
-  push('visual-spectacles-movie', '4K IMAX Visual Spectacles', 'movie');
-  // #24 Top Action & Dark Anime (series only)
-  push('action-anime-series', 'Top Action & Dark Anime', 'series');
-  // #25 All-Time Classics (movie only)
-  push('all-time-classics-movie', 'All-Time Classics', 'movie');
+  // v1.5.5: the genre/mood rows are gone COMPLETELY (Dark Crime,
+  // Underrated Gems, Sci-Fi, Psychological Thrillers, Action, 1-Season
+  // Binge, Visual Spectacles, Anime, All-Time Classics — 12 rows).
   // --- Upcoming / radar rows last (v1.4.3 reorder; relative order kept) ---
   // #6 Releasing Next 30 Days
   push('releasing-next-30-days-movie', 'Releasing Next 30 Days', 'movie');
@@ -88,10 +72,10 @@ function catalogs() {
 
 const MANIFEST = {
   id: 'com.bharatstreams',
-  version: '1.4.3',
+  version: '1.5.5',
   name: 'Binge Addon',
   description:
-    'Free Hindi-first Indian catalogs and streams. Trending India + Worldwide, New Releases — India + Worldwide, India Buzzing Now, Fresh Digital Drops, Latest Indian Movies & Web Series, Releasing Next 30 Days, Big Announcements, Now in Theatres, Dark Crime, Underrated Gems, Sci-Fi, Thrillers, Action, Mini-Series, Visual Spectacles, Anime and All-Time Classics, with Hindi 1080p streams first. This product uses the TMDB API but is not endorsed or certified by TMDB.',
+    'Free Hindi-first Indian catalogs and streams. Trending India + Worldwide, New Releases — India + Worldwide, India Buzzing Now, Fresh Digital Drops, Latest Indian Movies & Web Series, Releasing Next 30 Days, Big Announcements, Returning Soon and Now in Theatres, with Hindi 1080p streams first. This product uses the TMDB API but is not endorsed or certified by TMDB.',
   resources: [
     'catalog',
     { name: 'meta', types: ['movie', 'series'], idPrefixes: ['tt'] },

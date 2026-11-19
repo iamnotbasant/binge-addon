@@ -31,7 +31,7 @@ const daysAgoStr = (n) => new Date(Date.now() - n * DAY).toISOString().slice(0, 
 console.log('=== 0. Manifest ===');
 {
   const list = catalogs();
-  eq(list.length, 29, '29 catalogs (27 + 2 buzz)');
+  eq(list.length, 17, '17 catalogs (29 - 12 removed rows)');
   eq(list[0].id, 'trending-indian-movie', 'row 1 = Trending in India movie');
   eq(list[1].id, 'trending-indian-series', 'row 2 = Trending in India series');
   eq(list[2].id, 'new-releases-movie', 'row 3 = New Releases movie (directly under Trending India)');
