@@ -122,7 +122,7 @@ const AUDIO_TAGS = ['Atmos', 'TrueHD', 'DTS-HD MA', 'DTS', 'DD+', 'DD', 'AAC', '
 // case-insensitive substring test for it, and "BDRemux" (no word boundary
 // before "Remux") must still match — "remux" only ever means a remux.
 const VISUAL_TAGS = ['HDR10+', 'HDR10', 'Dolby Vision', 'DV', 'HDR', 'BluRay', 'WEB-DL', 'WEBRip', 'HDRip', 'HDTV', 'Remux'];
-const ENCODE_TAGS = ['HEVC', 'x265', 'AVC', 'x264', '10bit'];
+const ENCODE_TAGS = ['HEVC', 'x265', 'h265', 'AVC', 'x264', 'h264', '10bit'];
 
 function findTags(text, tags) {
   const found = [];
@@ -141,6 +141,10 @@ function findTags(text, tags) {
   // previously vanished from the Audio line entirely).
   if (out.includes('EAC3')) out = out.map((t) => (t === 'EAC3' ? 'DD+' : t));
   if (out.includes('AC3')) out = out.map((t) => (t === 'AC3' ? 'DD' : t));
+  // h264/h265 are the same codecs as x264/x265 — normalise so the
+  // encode slot shows one name ("x264"), never both.
+  if (out.includes('h265')) out = out.map((t) => (t === 'h265' ? 'x265' : t));
+  if (out.includes('h264')) out = out.map((t) => (t === 'h264' ? 'x264' : t));
   out = [...new Set(out)];
   // Keep only the most specific variant when several overlap:
   // "DTS-HD MA" subsumes "DTS", "DD+" (incl. "DDP") subsumes "DD",
@@ -179,6 +183,8 @@ const TAG_RE = {
   x265: /(?<![A-Za-z])x265(?![A-Za-z])/i,
   AVC: /(?<![A-Za-z])avc(?![A-Za-z])/i,
   x264: /(?<![A-Za-z])x264(?![A-Za-z])/i,
+  h264: /(?<![A-Za-z])h[.\- ]?264(?![A-Za-z])/i,
+  h265: /(?<![A-Za-z])h[.\- ]?265(?![A-Za-z])/i,
   '10bit': /(?<![A-Za-z])10-?bit(?![A-Za-z])/i,
   HDRip: /(?<![A-Za-z])hdrip(?![A-Za-z])/i,
   HDTV: /(?<![A-Za-z])hdtv(?![A-Za-z])/i,
@@ -275,6 +281,124 @@ function parseChannels(text) {
   return m ? m[1] : null;
 }
 
+// ---------------------------------------------------------------------------
+// Release group, duration, debrid-ready markers (compact format, v1.1.4).
+// All three come ONLY from tokens actually present in the raw source
+// text; a missing token means its line is omitted, never invented.
+// ---------------------------------------------------------------------------
+
+// Tokens that are NOT a release group: codecs, resolutions, sources,
+// audio tags, language words, sizes, bitrates, site names/TLDs, junk. A
+// trailing token matching any of these is rejected, never shown.
+const GROUP_DENY = new Set([
+  'hevc', 'x265', 'x264', 'h264', 'h265', 'avc', '10bit', '10-bit',
+  '480p', '720p', '1080p', '2160p', '480', '720', '1080', '2160', '4k', 'uhd', '2k',
+  'bluray', 'web-dl', 'webdl', 'webrip', 'hdrip', 'hdtv', 'remux', 'bdrip', 'brrip',
+  'dvdrip', 'dvdscr', 'dvd-scr', 'screener', 'scr', 'predvd', 'pre-dvd',
+  'cam', 'hdcam', 'camrip', 'ts', 'tc', 'hdts', 'hdtc', 'telesync', 'telecine',
+  'aac', 'ac3', 'eac3', 'dd', 'ddp', 'dd+', 'dts', 'atmos', 'truehd', 'flac', 'opus',
+  'esub', 'esubs', 'sub', 'subs', 'hq', 'true', 'org', 'hc', 'line', 'multi', 'dual',
+  'hindi', 'english', 'tamil', 'telugu', 'malayalam', 'kannada', 'bengali',
+  'marathi', 'gujarati', 'punjabi', 'korean', 'russian', 'japanese', 'chinese',
+  'spanish', 'french', 'german', 'thai', 'vietnamese',
+  'ext', 'nogrp', 'nogroup', 'proper', 'repack', 'imax', 'remastered', 'ds4k',
+  'com', 'net', 'org', 'io', 'in', 'co', 'cc', 'to', 'me', 'xyz', 'info',
+  'site', 'online', 'live', 'top', 'click', 'vip', 'fun', 'app', 'world', 'one',
+]);
+
+// Site names (and their variants) can never be a release group:
+// "…x264-HDHub4u.Ms" has no group; "…-4kHdHub" is the same site.
+const GROUP_SITE_RE = /hdhub|tamilmv|movierulz|filmyzilla|filmywap|9xmovies|vegamovies|moviesflix|worldfree4u|skymovieshd|tamilrockers|moviesda|katmoviehd|7starhd|8xmovies|1tamilmv|5movierulz|bolly4u/i;
+
+function cleanGroupToken(tok) {
+  if (!tok) return null;
+  const t = tok.trim();
+  if (t.length < 2 || t.length > 20) return null;
+  const low = t.toLowerCase();
+  if (GROUP_DENY.has(low)) return null;
+  if (/^\d+(\.\d+)?\s*(gb|mb)$/i.test(t)) return null; // size
+  if (/^\d+\s*kbps$/i.test(t)) return null; // bitrate
+  if (/^\d+$/.test(t)) return null; // bare number
+  if (GROUP_SITE_RE.test(t)) return null; // site name / variant
+  return t;
+}
+
+// Trailing release group of a release filename ("…-Preacher",
+// "…x264 SAMPA", "…x264-[YTS.AM]" -> "YTS", "…(WiKi-LUMiX)" -> "WiKi").
+// rawText is the raw filename (or the title's first line when there is no
+// filename); cleanText is its cleaned form (dots are spaces, site
+// prefixes stripped). The bracketed form is checked on the raw text
+// because cleanTitle strips trailing "[…]" tags.
+function parseReleaseGroup(rawText, cleanText) {
+  const raw = (rawText || '').replace(/\.(mkv|mp4|avi|webm)$/i, '').trim();
+  let m = raw.match(/\[([A-Za-z0-9]+)(?:[.\s][^\]]*)?\]\s*$/);
+  if (m) { const g = cleanGroupToken(m[1]); if (g) return g; }
+  const clean = (cleanText || '').trim();
+  if (!clean) return null;
+  // Trailing parenthesised group: "(WiKi-LUMiX)" -> "WiKi" (first token).
+  m = clean.match(/\(\s*([A-Za-z0-9]+)(?:[-.\s][^)]*)?\)\s*$/);
+  if (m) { const g = cleanGroupToken(m[1]); if (g) return g; }
+  // Cut a truncated "(…" tail (HdHub descriptions cut mid-token, e.g.
+  // "…x265 (DarQ HONE-L"): if the last '(' has no matching ')' after
+  // it, drop from that '(' on — a fragment is never a group. Then drop
+  // a trailing close bracket and take the last dash/space token.
+  let cut = clean;
+  const lastOpen = cut.lastIndexOf('(');
+  const lastClose = cut.lastIndexOf(')');
+  if (lastOpen > lastClose) cut = cut.slice(0, lastOpen).trim();
+  cut = cut.replace(/[)\]]\s*$/, '').trim();
+  // Greedy prefix forces the LAST dash/space separator, so
+  // "AC3-LOKI-M2Tv" yields "M2Tv" (not "AC3-LOKI-M2Tv") and
+  // "5.1-Preacher" yields "Preacher" (not "5.1-Preacher").
+  m = cut.match(/.*[-–\s]([A-Za-z0-9][A-Za-z0-9._-]{1,19})\s*$/);
+  if (!m) return null;
+  return cleanGroupToken(m[1].split('.')[0]);
+}
+
+// Per-file duration, only when the raw source text actually carries one
+// ("41m:22s", "41m 22s", "1h 23m"). Comet titles carry it; Torrentio
+// titles do not (verified live 19 Nov: 0 duration tokens in 190
+// Torrentio rows for Reacher S4E2). Never derived from size/bitrate.
+function parseDuration(text) {
+  const m = (text || '').match(/\b(\d{1,3})m(?::|\s+)(\d{1,2})s\b|\b(\d{1,2})h\s+(\d{1,2})m\b/);
+  if (!m) return null;
+  if (m[1] !== undefined) return `${m[1]}m:${String(m[2]).padStart(2, '0')}s`;
+  return `${m[3]}h ${m[4]}m`;
+}
+
+// Debrid-ready marker, only when the raw source text carries it
+// ("Ready (TB)" / "Ready (RD)" — Comet/MediaFusion titles; Torrentio
+// never carries it). Known service names normalise to their 2-letter
+// code; an unknown code longer than 4 chars is dropped, never shown.
+const READY_CODE = {
+  torbox: 'TB', 'real-debrid': 'RD', realdebrid: 'RD', alldebrid: 'AD',
+  'all-debrid': 'AD', premiumize: 'PM', 'debrid-link': 'DL', debridlink: 'DL',
+  easydebrid: 'ED', pikpak: 'PK', offcloud: 'OC',
+};
+function parseReady(text) {
+  const m = (text || '').match(/\bReady\s*\(\s*([A-Za-z][A-Za-z-]{0,11})\s*\)/i);
+  if (!m) return null;
+  const raw = m[1].toLowerCase();
+  if (READY_CODE[raw]) return READY_CODE[raw];
+  const code = m[1].toUpperCase();
+  return code.length <= 4 ? code : null;
+}
+
+// Flag emoji per audio language (compact format, v1.1.4): Hindi and every
+// other Indian language fly 🇮🇳; English flies 🇬🇧; the rest use the
+// FLAG_LANG reverse map. A language with no flag gets none — never
+// invented.
+const LANG_FLAG = {
+  hindi: '🇮🇳', english: '🇬🇧', tamil: '🇮🇳', telugu: '🇮🇳', malayalam: '🇮🇳',
+  kannada: '🇮🇳', bengali: '🇮🇳', marathi: '🇮🇳', gujarati: '🇮🇳', punjabi: '🇮🇳',
+};
+for (const [flag, lang] of Object.entries(FLAG_LANG)) {
+  if (!LANG_FLAG[lang]) LANG_FLAG[lang] = flag;
+}
+
+// Addon display name per source (provider line, compact format v1.1.4).
+const PROVIDER_LABEL = { torrentio: 'Torrentio', comet: 'Comet', hdhub: 'HdHub' };
+
 // Hindi first, English second, the rest alphabetical — deterministic, so
 // the same stream always renders the same Audio line.
 function orderLangs(langs) {
@@ -314,6 +438,10 @@ function parseTorrentioLike(stream) {
     audio: findTags(parseText, AUDIO_TAGS),
     visual: findTags(parseText, VISUAL_TAGS),
     encode: findTags(parseText, ENCODE_TAGS),
+    group: parseReleaseGroup(filename || firstLine(title),
+      isBareDomainTitle(fromFile) ? (fromTitle || fromFile) : (fromFile || fromTitle)),
+    duration: parseDuration(parseText),
+    ready: parseReady(parseText),
     displayTitle,
     rawText: parseText,
   };
@@ -362,6 +490,9 @@ function parseHdHub(stream) {
     audio: findTags(parseText, AUDIO_TAGS),
     visual: findTags(parseText, VISUAL_TAGS),
     encode: findTags(parseText, ENCODE_TAGS),
+    group: parseReleaseGroup(filename, cleanTitle(filename)),
+    duration: parseDuration(parseText),
+    ready: parseReady(parseText),
     displayTitle: cleanTitle(filename),
     rawText: parseText,
   };
@@ -465,10 +596,10 @@ function cleanTitle(text) {
 // Locked display name (v1.1.1, basant-approved): title + year ONLY —
 // "Jailer 2 (2026)" — plus the SxxExx tag for series ("Mirzapur S01E01").
 // Everything after the year (resolution, source, codec, size, release
-// group, junk) is cut: those signals live in the labeled lines. A
-// repeated year ("Interstellar 2014 2014") collapses — the title is cut
-// at the FIRST year. No year and no series tag: cut at the first tech
-// token instead. Returns '' when nothing usable remains; the caller
+// group, junk) is cut: those signals live in the compact description
+// lines. A repeated year ("Interstellar 2014 2014") collapses — the title
+// is cut at the FIRST year. No year and no series tag: cut at the first
+// tech token instead. Returns '' when nothing usable remains; the caller
 // falls back to the full cleaned title.
 function extractDisplayName(cleaned) {
   const t = (cleaned || '').trim();
@@ -652,63 +783,85 @@ function resLabel(res) {
   return 'Unknown';
 }
 
-// Locked display format (v1.1.1, basant-approved Telegram-channel style):
-//   Name:    "Jailer 2 (2026)"                 (title + year only)
-//   Quality: 1080p HDRip                       (resolution + source + HDR)
-//   Audio:   Hindi + English | DD+ 5.1         (languages | codec + channels)
-//   Size:    1.57 GB                           (size once)
-// Each signal appears exactly once, in its own labeled line; a line is
-// omitted entirely when its signal is genuinely missing — never invented.
-// Dropped from display by design (see the before/after table in
-// tests/test-stream-format.js): video encode (HEVC/x264 — the badge pack
-// already dropped the encoder group in v1.0.6 for the same reason),
-// secondary audio tracks (only the primary codec shows — the locked
-// example shows "DD+ 5.1" for a stream that also carries AAC),
-// release groups, bitrates (192Kbps), ESub/ORG/HQ/TRUE/LiNE/HC junk,
-// the filename's rounded size (the 💾 size is authoritative).
+// Compact display format (v1.1.4, basant: "image jaisa banao") — the
+// AIOStreams minimalist shape, so Nuvio renders the same compact card:
+//   Name: "Jailer 2 (2026)"                  (title + year only, unchanged)
+//   1080p | BluRay REMUX AVC ⏱ 41m:22s      (resolution | source + HDR + encode [+ duration])
+//   DTS-HD MA 5.1 🇬🇧                        (primary codec + channels + flag emojis)
+//   💾 8.5 GB                                (size once)
+//   📦 Preacher                              (release group)
+//   🔍 Comet ⚡ Ready (TB)                    (source addon [+ debrid-ready passthrough])
+// Each line is omitted entirely when its signal is genuinely missing —
+// never invented. Duration/Ready come ONLY from tokens parsed out of the
+// raw source title (Comet carries them; Torrentio does not). The HDR
+// variant stays in line 1 (it feeds the Onyx HDR badges, and dropping it
+// would lose a real signal vs v1.1.3). CAM streams: "720p CAM TeleSync"
+// in line 1 (v1.1.2 rule, label dropped with the rest). Dropped from
+// display by design: secondary audio tracks (only the primary codec
+// shows), bitrates (192Kbps), ESub/ORG/HQ/TRUE/LiNE/HC junk,
+// Comet-internal tokens ("NOGRP", "DebridAccount|torbox",
+// "dmm_hashlist"), the filename's rounded size (the 💾 size is
+// authoritative).
 function formatStream(p) {
   const s = p.raw;
   const res = resLabel(p.resolution);
   const name = extractDisplayName(p.displayTitle) || p.displayTitle || 'Binge Addon';
 
-  // Quality: resolution + source + HDR variant, each once.
-  // v1.1.2 CAM fallback: a CAM stream is marked IN the Quality line
-  // ("720p CAM TeleSync") AND gets a plain warning line, so it can never
-  // be mistaken for clean HD. Clean streams are never marked.
-  const qualityBits = [];
-  if (p.resolution) qualityBits.push(resLabel(p.resolution));
+  // Line 1: resolution | source + HDR + encode. CAM streams keep the
+  // v1.1.2 marking ("720p CAM TeleSync") with no pipe — CAM + kind can
+  // never be mistaken for clean HD. Clean streams are never marked.
+  // "Remux" rides along after the primary source ("BluRay REMUX") —
+  // the screenshot's top stream shows exactly that pair.
+  const sourceList = ['BluRay', 'WEB-DL', 'WEBRip', 'HDRip', 'HDTV'];
+  const source = sourceList.find((t) => p.visual.includes(t))
+    || (p.visual.includes('Remux') ? 'Remux' : null);
+  const sourceBits = [source, (p.visual.includes('Remux') && source !== 'Remux') ? 'Remux' : null]
+    .filter(Boolean);
+  const hdrBits = p.visual
+    .filter((t) => ['HDR10+', 'HDR10', 'DV', 'HDR'].includes(t))
+    .map((t) => (t === 'DV' ? 'Dolby Vision' : t));
+  const encode = p.encode && p.encode.length
+    ? (p.encode[0] === '10bit' ? '10-Bit' : p.encode[0])
+    : null;
+  let line1 = '';
   if (p.isCam) {
-    qualityBits.push('CAM');
-    if (p.camKind && !['CAM', 'HDCAM', 'CAMRip'].includes(p.camKind)) qualityBits.push(p.camKind);
+    const bits = [];
+    if (p.resolution) bits.push(resLabel(p.resolution));
+    bits.push('CAM');
+    if (p.camKind && !['CAM', 'HDCAM', 'CAMRip'].includes(p.camKind)) bits.push(p.camKind);
+    if (sourceBits.length) bits.push(...sourceBits);
+    if (encode) bits.push(encode);
+    line1 = bits.join(' ');
+  } else {
+    const tail = [...sourceBits, ...hdrBits, encode].filter(Boolean).join(' ');
+    line1 = p.resolution ? (tail ? `${resLabel(p.resolution)} | ${tail}` : resLabel(p.resolution)) : tail;
   }
-  const source = ['BluRay', 'WEB-DL', 'WEBRip', 'HDRip', 'HDTV', 'Remux'].find((t) => p.visual.includes(t));
-  if (source) qualityBits.push(source);
-  for (const t of p.visual) {
-    if (t === 'HDR10+' || t === 'HDR10' || t === 'HDR') qualityBits.push(t);
-    else if (t === 'DV') qualityBits.push('Dolby Vision');
-  }
+  if (line1 && p.duration) line1 += ` ⏱ ${p.duration}`;
 
-  // Audio: languages first, then the PRIMARY codec + channels. findTags
-  // returns codecs in priority order (Atmos > TrueHD > DTS-HD MA > DTS >
-  // DD+ > DD > AAC...), so audio[0] is the best track; secondary tracks
-  // ("DD+ 5.1 & AAC") are dropped — the locked example shows exactly one
-  // codec ("DD+ 5.1") for a stream that also carries AAC. Languages come
-  // from p.audioLangs — the single flag-priority set — so the title can
-  // never contradict the line.
+  // Line 2: primary codec + channels + flag emojis. findTags returns
+  // codecs in priority order (Atmos > TrueHD > DTS-HD MA > DTS > DD+ >
+  // DD > AAC...), so audio[0] is the best track; secondary tracks
+  // ("DD+ 5.1 & AAC") are dropped. Languages come from p.audioLangs —
+  // the single flag-priority set — so the line can never contradict
+  // itself. Identical flags collapse to one (four Indian languages all
+  // fly 🇮🇳 — "🇮🇳 🇮🇳 🇮🇳 🇮🇳" would look broken).
   const audioLangs = p.audioLangs
     || new Set([...p.langs].filter((l) => LANG_LABEL[l]));
-  const langPart = orderLangs(audioLangs).map((l) => LANG_LABEL[l]).join(' + ');
+  const flags = [...new Set(orderLangs(audioLangs).map((l) => LANG_FLAG[l]).filter(Boolean))].join(' ');
   let codecPart = '';
   if (p.audio.length) {
     codecPart = p.audio[0];
     if (p.channels) codecPart += ` ${p.channels}`;
   }
-  const audioPart = [langPart, codecPart].filter(Boolean).join(' | ');
+  const line2 = [codecPart, flags].filter(Boolean).join(' ');
 
   const lines = [];
-  if (qualityBits.length) lines.push(`Quality: ${qualityBits.join(' ')}`);
-  if (audioPart) lines.push(`Audio: ${audioPart}`);
-  if (p.size) lines.push(`Size: ${p.size.value} ${p.size.unit}`);
+  if (line1) lines.push(line1);
+  if (line2) lines.push(line2);
+  if (p.size) lines.push(`💾 ${p.size.value} ${p.size.unit}`);
+  if (p.group) lines.push(`📦 ${p.group}`);
+  const provider = PROVIDER_LABEL[p.source];
+  if (provider) lines.push(`🔍 ${provider}${p.ready ? ` ⚡ Ready (${p.ready})` : ''}`);
 
   const hints = {};
   if (s.behaviorHints) {
@@ -744,6 +897,7 @@ function formatStream(p) {
 
 module.exports = {
   parseLanguages, parseAudioLanguages, parseChannels, parseResolution,
-  parseSeeders, languageVerdict, languageRank, compareParsed, compareCam,
+  parseSeeders, parseReleaseGroup, parseDuration, parseReady,
+  languageVerdict, languageRank, compareParsed, compareCam,
   camKind, processSourceStreams, dedupe, formatStream, cleanTitle, extractDisplayName,
 };

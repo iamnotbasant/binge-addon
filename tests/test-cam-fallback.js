@@ -2,10 +2,12 @@
 // RULE (locked): CAM/TeleCine/TeleSync/HDTS/HDTC/DVDScr/SCR streams stay
 // HIDDEN whenever clean streams exist (v1.0.3 stands). They appear ONLY
 // as a last resort when a title has ZERO clean streams after filtering,
-// and every shown CAM stream is CLEARLY marked in its Quality line
-// (CAM + kind). v1.1.3 (basant: "note likhne ke jarurat nahi hai bhai"):
-// the extra "Note: CAM print — theatre recording" line is GONE — the
-// Quality line's CAM marking is the whole warning now.
+// and every shown CAM stream is CLEARLY marked in its line-1
+// ("1080p CAM TeleCine", CAM + kind). v1.1.3 (basant: "note likhne ke
+// jarurat nahi hai bhai"): the extra "Note: CAM print — theatre
+// recording" line is GONE — the line-1 CAM marking is the whole warning
+// now. v1.1.4: the labeled "Quality:" line is gone too — CAM lives in
+// the compact line 1.
 //
 // Fixtures are REAL live Torrentio rows captured 18 Nov 2026 ~18:30 IST:
 //   tests/fixtures/ramayana-torrentio-20261118.json  (43 rows, ALL CAM)
@@ -60,12 +62,12 @@ const ramMerge = mergeStreamResults([{ name: 'torrentio', streams: ram.kept, cam
 eq(ramMerge.usedCam, true, 'merge falls back to CAM when clean is empty');
 eq(ramMerge.parsed.length, 36, 'merge returns all 36 CAM streams (under cap 40)');
 const ramOut = ramMerge.parsed.map(formatStream);
-check(ramOut.every((o) => /Quality: .*CAM/.test(o.description)), 'every CAM stream has CAM in its Quality line');
+check(ramOut.every((o) => o.description.split('\n')[0].includes('CAM')), 'every CAM stream has CAM in its line 1');
 check(ramOut.every((o) => !/Note:/.test(o.description)), 'no Note line in any CAM stream description (v1.1.3: Note line removed)');
 check(ramOut.every((o) => !/CAM/.test(o.name)), 'CAM never leaks into the name');
 eq(ramOut[0].name, 'Ramayana (2026)', 'first CAM stream name');
 eq(ramOut[0].description,
-  'Quality: 1080p CAM TeleCine\nSize: 6.38 GB',
+  '1080p CAM TeleCine\n💾 6.38 GB\n📦 1O8Op\n🔍 Torrentio',
   'first CAM stream description (exact)');
 
 // ---------------------------------------------------------------------------
@@ -86,8 +88,8 @@ check(!jaiOut.some((o) => /CAM/.test(`${o.name}\n${o.description}`)),
 check(!jaiOut.some((o) => /Note: CAM print/.test(o.description)), 'no CAM Note line in clean output');
 eq(jaiOut[0].name, 'Jailer 2 (2026)', 'first clean stream name (unchanged)');
 eq(jaiOut[0].description,
-  'Quality: 1080p HDRip\nAudio: Hindi + English | DD+ 5.1\nSize: 1.57 GB',
-  'first clean stream description (unchanged locked format)');
+  '1080p | HDRip HEVC\nDD+ 5.1 🇮🇳 🇬🇧\n💾 1.57 GB\n🔍 Torrentio',
+  'first clean stream description (compact format v1.1.4)');
 
 // ---------------------------------------------------------------------------
 // 4. Clean-only title: Dangal corpus rows — unchanged behaviour
