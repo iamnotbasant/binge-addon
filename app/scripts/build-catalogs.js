@@ -27,6 +27,7 @@
 'use strict';
 
 const { knob } = require('../lib/config');
+const { fetchBuzzItems, groqAnalyze, matchTmdbTitle, normalizeTitle, buzzFloorPass } = require('../lib/buzz');
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const IMG_BASE = 'https://image.tmdb.org/t/p/w342';
@@ -126,6 +127,12 @@ const REL_NEXT_INDIAN_TARGET = 10;  // v1.3.3 reserved Indian slots in the
 // Releasing Next 30 Days movie row (same 10/10 split as v1.3.1).
 const REL_NEXT_PREMIERE_TARGET = 10; // v1.3.3 reserved new-premiere slots
 // in the Releasing Next 30 Days series row; returning seasons fill the rest.
+const BUZZ_MIN_VOTE = 6;      // v1.3.4 India Buzzing Now quality floor
+// ("badiya"-lite — buzz is hype, so the floor is lighter than the
+// new-releases 6.5): rated path needs vote_average >= 6.0 AND
+// vote_count >= 10; the fresh/upcoming path (released in the last 30
+// days or releasing in the next 90) needs no votes yet, or >= 6.0.
+const BUZZ_MIN_VOTES = 10;    // v1.3.4 rated-path vote_count floor.
 
 // v1.3.1: legacy per-row Blob files for REMOVED catalogs. The bundle no
 // longer carries them, but readCatalogFile falls back to the frozen
@@ -656,6 +663,64 @@ async function buildRows(type, key, idMap, stats, ctx) {
     windowDays: newRelDays,
   };
   rows['new-releases'] = newRelSliced.map((x) => x.meta);
+
+  // --- v1.3.4: India Buzzing Now (both types) ---
+  // The ranked title lists were fetched + Groq-analysed ONCE for the
+  // whole rebuild (collectBuzz in main(), stored in ctx.buzz) — each
+  // type consumes its own list here. Matching is TMDB search on the
+  // normalized title (top-3, prefix-aware — "King" must not match
+  // "The King"); the quality floor is in lib/buzz.js (rated path OR
+  // fresh/upcoming path). Order is the BUZZ order (the LLM's ranking),
+  // NOT re-sorted by popularity — the buzz ranking IS the row. Series
+  // go through the same seriesMeta path (IMDb + v1.4 TV filter) as
+  // every other series row; movies resolve IMDb the same way. A title
+  // that cannot be matched, fails the floor, or has no IMDb id is
+  // skipped and named in stats — never invented, never padded.
+  const buzzVote = K('india-buzzing-now', 'voteFloor', BUZZ_MIN_VOTE);
+  const buzzVotes = K('india-buzzing-now', 'voteCountFloor', BUZZ_MIN_VOTES);
+  const buzzList = (ctx.buzz && ctx.buzz[isMovie ? 'movies' : 'series']) || [];
+  const buzzMetas = [];
+  const buzzSeen = new Set();
+  const buzzRowStats = { ranked: buzzList.length, matched: 0, unmatched: [], belowFloor: [], noImdb: 0 };
+  for (const cand of buzzList) {
+    if (buzzMetas.length >= ROW_CAP) break;
+    // Search TMDB with the NORMALIZED title (trailer/teaser words and
+    // "Season N" stripped) — the raw Groq title ("Panchayat Season 5")
+    // often matches nothing, while the normalized title ("panchayat")
+    // matches the show. matchTmdbTitle normalizes again on both sides,
+    // so "King" still never matches "The King".
+    const searchTitle = normalizeTitle(cand.title, type) || cand.title;
+    const searchPath = isMovie ? '/search/movie' : '/search/tv';
+    const searchRes = await tmdb(searchPath, key, { query: searchTitle, page: 1 });
+    const hit = matchTmdbTitle(searchTitle, type, searchRes.results || []);
+    if (!hit) {
+      if (buzzRowStats.unmatched.length < 10) buzzRowStats.unmatched.push(cand.title);
+      continue;
+    }
+    if (buzzSeen.has(hit.id)) continue;
+    buzzSeen.add(hit.id);
+    const floor = buzzFloorPass(hit, { vote: buzzVote, votes: buzzVotes }, today);
+    if (!floor.keep) {
+      if (buzzRowStats.belowFloor.length < 10) {
+        buzzRowStats.belowFloor.push(`${hit.title || hit.name} (va ${hit.vote_average}/vc ${hit.vote_count})`);
+      }
+      continue;
+    }
+    buzzRowStats.matched++;
+    let meta = null;
+    if (isMovie) {
+      const imdbId = await resolveImdb(type, hit.id, key, idMap);
+      if (!imdbId) { stats.excludedNoImdb++; buzzRowStats.noImdb++; continue; }
+      meta = toMeta(hit, type, imdbId);
+    } else {
+      meta = await seriesMeta(hit, key, idMap, seriesCache, stats);
+      if (!meta) continue;
+    }
+    if (meta) buzzMetas.push(meta);
+  }
+  rows['india-buzzing-now'] = buzzMetas;
+  stats.buzz = stats.buzz || {};
+  stats.buzz[type] = { total: buzzMetas.length, ...buzzRowStats };
 
   // --- #2 Trending Worldwide: TMDB /trending/{type}/week, NO Indian
   // filter (v1.2 logic, reused) — the week's worldwide hits. Scan up
@@ -1261,6 +1326,32 @@ async function readIdMap() {
   }
 }
 
+// v1.3.4: fetch today's buzz ONCE per rebuild (all three sources in
+// parallel + one Groq ranking call) and store the ranked title lists
+// in ctx.buzz for buildRows to consume per type. NEVER throws: a dead
+// source, a missing GROQ_API_KEY, or a failed Groq call leaves the
+// buzz rows empty and the rest of the rebuild proceeds normally —
+// stats record exactly what happened so the row is debuggable, not
+// silently empty.
+async function collectBuzz() {
+  const out = { movies: [], series: [], sources: null, groq: { ok: false, error: 'not run' } };
+  try {
+    const fetched = await fetchBuzzItems();
+    out.sources = fetched.sources;
+    const groqKey = process.env.GROQ_API_KEY;
+    if (!groqKey) { out.groq = { ok: false, error: 'no GROQ_API_KEY' }; return out; }
+    if (!fetched.items.length) { out.groq = { ok: false, error: 'no buzz items' }; return out; }
+    const res = await groqAnalyze(fetched.items, groqKey);
+    if (res.error) { out.groq = { ok: false, error: res.error }; return out; }
+    out.movies = res.movies || [];
+    out.series = res.series || [];
+    out.groq = { ok: true, candidates: out.movies.length + out.series.length };
+  } catch (e) {
+    out.groq = { ok: false, error: String((e && e.message) || e).slice(0, 120) };
+  }
+  return out;
+}
+
 async function main() {
   const key = process.env.TMDB_API_KEY;
   if (!key) {
@@ -1284,6 +1375,15 @@ async function main() {
     keywordIds: await resolveKeywords(key, stats),
     config: cfg,
   };
+  // v1.3.4: buzz is fetched + ranked once for the whole rebuild (never
+  // throws — see collectBuzz), then each type consumes its own list.
+  try {
+    ctx.buzz = await collectBuzz();
+    stats.buzz = { sources: ctx.buzz.sources, groq: ctx.buzz.groq };
+  } catch (e) {
+    ctx.buzz = { movies: [], series: [], sources: null, groq: { ok: false, error: String(e.message || e).slice(0, 120) } };
+    stats.buzz = { sources: null, groq: ctx.buzz.groq };
+  }
   const rows = {};
   for (const type of ['movie', 'series']) {
     const built = await buildRows(type, key, idMap, stats, ctx);
@@ -1342,7 +1442,7 @@ async function main() {
   }
   const counts = Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, v.length]));
   console.log(`[build-catalogs] done. rows=${JSON.stringify(counts)} excludedNoImdb=${stats.excludedNoImdb} excludedTvShow=${JSON.stringify(stats.excludedTvShow)} keywords=${JSON.stringify(stats.keywords)} idMapSize=${Object.keys(idMap).length} bundleSkipped=${bundleResult.skipped} bundleHash=${bundleResult.hash.slice(0, 8)} prunedLegacy=${JSON.stringify(prunedLegacy)}`);
-  return { skipped: false, counts, excludedNoImdb: stats.excludedNoImdb, excludedTvShow: stats.excludedTvShow, keywords: stats.keywords, trendingTopUp: stats.trendingTopUp, newReleases: stats.newReleases, releasingNext30: stats.releasingNext30, bundleSkipped: bundleResult.skipped, bundleHash: bundleResult.hash, prunedLegacy };
+  return { skipped: false, counts, excludedNoImdb: stats.excludedNoImdb, excludedTvShow: stats.excludedTvShow, keywords: stats.keywords, trendingTopUp: stats.trendingTopUp, newReleases: stats.newReleases, releasingNext30: stats.releasingNext30, buzz: stats.buzz, bundleSkipped: bundleResult.skipped, bundleHash: bundleResult.hash, prunedLegacy };
 }
 
 if (require.main === module) {
@@ -1352,4 +1452,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main, buildRows, isIndianTitle };
+module.exports = { main, buildRows, isIndianTitle, collectBuzz };

@@ -170,15 +170,15 @@ function stubFetchFactory(searchResults, imdbMap, failIds = []) {
   // ---------------------------------------------------------------------------
   console.log('=== 3. Manifest (search extra) ===');
   {
-    eq(MANIFEST.version, '1.3.3', 'manifest version 1.3.3');
-    eq(catalogs().length, 28, '28 catalogs');
+    eq(MANIFEST.version, '1.3.4', 'manifest version 1.3.4');
+    eq(catalogs().length, 30, '30 catalogs');
     check(catalogs().every((c) => Array.isArray(c.extra) && c.extra.length === 1
       && c.extra[0].name === 'search' && c.extra[0].isRequired === false),
-    'ALL 28 catalogs carry extra [{ name: "search", isRequired: false }]');
+    'ALL 30 catalogs carry extra [{ name: "search", isRequired: false }]');
     const bytes = Buffer.byteLength(JSON.stringify(MANIFEST));
     check(bytes < 8192, `manifest stringifies to ${bytes} bytes (< 8 KB)`);
     const eff = effectiveCatalogs(defaultConfig());
-    eq(eff.length, 28, 'effectiveCatalogs (served manifest path) still 28');
+    eq(eff.length, 30, 'effectiveCatalogs (served manifest path) still 30');
     check(eff.every((c) => c.extra && c.extra[0].name === 'search' && c.extra[0].isRequired === false),
       'effectiveCatalogs carries the search extra through (not stripped)');
   }
@@ -193,8 +193,8 @@ function stubFetchFactory(searchResults, imdbMap, failIds = []) {
   try {
     const hRes = await fetch(`${BASE}/health`);
     const health = await hRes.json();
-    if (health.version !== '1.3.3') {
-      console.log(`  ⊘ SKIP live search checks — production is still ${health.version} (deploy 1.3.3 first)`);
+    if (health.version !== '1.3.4') {
+      console.log(`  ⊘ SKIP live search checks — production is still ${health.version} (deploy 1.3.4 first)`);
     } else {
       const getMetas = async (path) => {
         const r = await fetch(`${BASE}${path}`);

@@ -33,6 +33,7 @@ function defaultConfig() {
       'returning-soon': { windowDays: 45 },
       'now-in-theatres': { windowDays: 45, voteCountFloor: 10 },
       'new-releases': { windowDays: 45, voteFloor: 6.5, voteCountFloor: 100, voteCountFloorIndian: 10, voteCountFloorSeries: 25 },
+      'india-buzzing-now': { voteFloor: 6, voteCountFloor: 10 },
       'underrated-gems': { voteFloor: 7.8, voteCountFloor: 2000, voteCountCeil: 25000 },
       'scifi-time-travel': { voteFloor: 7.3 },
       'psychological-thrillers': { voteFloor: 7.5 },
