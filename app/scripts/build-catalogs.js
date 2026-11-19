@@ -968,15 +968,14 @@ async function writeRowsToBlob(rows, idMap, token) {
   }
 }
 
-async function readIdMap(token) {
-  if (!token) return {};
+// v1.2.8: direct public-URL read (SIMPLE request) with list()
+// fallback inside readBlobJson — the builder's one read per run no
+// longer burns an ADVANCED request either.
+async function readIdMap() {
   try {
-    const { list } = require('@vercel/blob');
-    const { blobs } = await list({ prefix: 'catalogs/_idmap.json', token });
-    const file = blobs.find((b) => b.pathname === 'catalogs/_idmap.json');
-    if (!file) return {};
-    const res = await fetch(file.url);
-    return res.ok ? await res.json() : {};
+    const { readBlobJson } = require('../lib/blob');
+    const json = await readBlobJson('catalogs/_idmap.json');
+    return json || {};
   } catch (e) {
     console.log(`[build-catalogs] could not read existing id map, starting fresh: ${e.message}`);
     return {};
@@ -997,7 +996,7 @@ async function main() {
   const stats = { excludedNoImdb: 0, excludedTvShow: { total: 0, byReason: {}, names: [] }, keywords: null, trendingTopUp: {} };
   const { readConfig } = require('../lib/config');
   const cfg = await readConfig();
-  const idMap = await readIdMap(token);
+  const idMap = await readIdMap();
   // v2.0: per-run detail caches (series + movie) shared across rows, and
   // the #19 Sci-Fi keyword ids resolved once, before any row builds.
   const ctx = {

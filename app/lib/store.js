@@ -5,8 +5,11 @@
 // The catalog handler only READS. The daily rebuild (scripts/build-catalogs.js)
 // writes; on failure it writes nothing, so yesterday's files keep serving.
 //
-// Without BLOB_READ_WRITE_TOKEN (e.g. before the store is created) the
-// handler returns null and the caller serves { metas: [] } — never a crash.
+// v1.2.8: reads go through lib/blob.js — direct public URL (a SIMPLE
+// Blob request) with the old list() path as fallback. Reads no longer
+// need BLOB_READ_WRITE_TOKEN and no longer burn an ADVANCED request
+// per catalog; without the store (direct 404 + no token for list())
+// the handler returns null and the caller serves { metas: [] }.
 
 'use strict';
 
@@ -21,19 +24,13 @@ async function readCatalogFile(catalogId) {
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value;
 
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!token) {
-    console.log('[binge-addon] catalog store: no BLOB_READ_WRITE_TOKEN, serving empty row');
-    return null;
-  }
+  // v1.2.8: direct public-URL read (SIMPLE request) with list()
+  // fallback inside readBlobJson — no BLOB_READ_WRITE_TOKEN needed
+  // for the direct path, and no list() burned per catalog load.
   try {
-    const { list } = require('@vercel/blob');
-    const { blobs } = await list({ prefix: key, token });
-    const file = blobs.find((b) => b.pathname === key);
-    if (!file) return null;
-    const res = await fetch(file.url);
-    if (!res.ok) return null;
-    const json = await res.json();
+    const { readBlobJson } = require('./blob');
+    const json = await readBlobJson(key);
+    if (!json) return null;
     const value = { metas: Array.isArray(json.metas) ? json.metas : [], builtAt: json.builtAt || null };
     cache.set(key, { at: Date.now(), value });
     return value;
@@ -57,16 +54,12 @@ async function readCatalogMeta(catalogId) {
 let idMapCache = null; // { at, value }
 async function readIdMap() {
   if (idMapCache && Date.now() - idMapCache.at < CACHE_TTL_MS) return idMapCache.value;
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!token) return {};
+  // v1.2.8: direct public-URL read (SIMPLE request) with list()
+  // fallback inside readBlobJson.
   try {
-    const { list } = require('@vercel/blob');
-    const { blobs } = await list({ prefix: 'catalogs/_idmap.json', token });
-    const file = blobs.find((b) => b.pathname === 'catalogs/_idmap.json');
-    if (!file) return {};
-    const res = await fetch(file.url);
-    if (!res.ok) return {};
-    const json = await res.json();
+    const { readBlobJson } = require('./blob');
+    const json = await readBlobJson('catalogs/_idmap.json');
+    if (!json) return {};
     idMapCache = { at: Date.now(), value: json };
     return json;
   } catch (e) {

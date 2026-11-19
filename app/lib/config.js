@@ -76,20 +76,15 @@ function invalidateConfigCache() { cache = null; }
 
 async function readConfig() {
   if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.value;
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  // v1.2.8: direct public-URL read (SIMPLE request) with list()
+  // fallback inside readBlobJson.
   let cfg = defaultConfig();
-  if (token) {
-    try {
-      const { list } = require('@vercel/blob');
-      const { blobs } = await list({ prefix: CONFIG_KEY, token });
-      const file = blobs.find((b) => b.pathname === CONFIG_KEY);
-      if (file) {
-        const res = await fetch(file.url);
-        if (res.ok) cfg = normalizeConfig(await res.json());
-      }
-    } catch (e) {
-      console.log(`[binge-addon] config read failed, using defaults: ${e.message}`);
-    }
+  try {
+    const { readBlobJson } = require('./blob');
+    const json = await readBlobJson(CONFIG_KEY);
+    if (json) cfg = normalizeConfig(json);
+  } catch (e) {
+    console.log(`[binge-addon] config read failed, using defaults: ${e.message}`);
   }
   cache = { at: Date.now(), value: cfg };
   return cfg;

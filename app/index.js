@@ -29,7 +29,7 @@ const { readProfiles, writeProfiles, resolveProfile, createCustomProfile } = req
 
 const STREAM_CAP = 40;
 const ADDON_NAME = 'binge-addon';
-const VERSION = '1.2.7';
+const VERSION = '1.2.8';
 
 const builder = new addonBuilder(MANIFEST);
 
@@ -324,25 +324,22 @@ app.get('/admin/api/status', requireAdmin, async (req, res) => {
     const cfg = await readConfig();
     const catalogs = [];
     let lastBuiltAt = null;
-    const token = process.env.BLOB_READ_WRITE_TOKEN;
 
     // Primary: fetch lightweight summary manifest catalogs/_summary.json bypassing 5-min store cache
     // v1.0.9: in-memory cache, 60s TTL — the list()+fetch on every status
     // call was ~0.87s of the warm ~1.45s latency. Fallback branch untouched.
+    // v1.2.8: direct public-URL read (SIMPLE request) with list()
+    // fallback inside readBlobJson — no ADVANCED request per status call.
     let summary = null;
     if (summaryCache.data && Date.now() - summaryCache.at < 60 * 1000) {
       summary = summaryCache.data;
-    } else if (token) {
+    } else {
       try {
-        const { list } = require('@vercel/blob');
-        const { blobs } = await list({ prefix: 'catalogs/_summary.json', token });
-        const file = (blobs || []).find((b) => b.pathname === 'catalogs/_summary.json');
-        if (file) {
-          const sRes = await fetch(file.url);
-          if (sRes.ok) {
-            summary = await sRes.json();
-            summaryCache = { at: Date.now(), data: summary };
-          }
+        const { readBlobJson } = require('./lib/blob');
+        const json = await readBlobJson('catalogs/_summary.json');
+        if (json) {
+          summary = json;
+          summaryCache = { at: Date.now(), data: summary };
         }
       } catch (err) {
         console.log(`[binge-addon] summary manifest read error: ${err.message}`);
@@ -379,34 +376,20 @@ app.get('/admin/api/status', requireAdmin, async (req, res) => {
         }
       }
     } else {
-      // Fallback: single prefix list of catalogs/ with internal files filtered out,
-      // followed by concurrent Blob fetches via Promise.allSettled.
+      // Fallback: read each catalog row directly by public URL via the
+      // store's 5-min cache (readCatalogMeta), no prefix list().
+      // v1.2.8: the old list('catalogs/') + fetch-all fallback is gone —
+      // the row ids come from config, and each read is a SIMPLE request
+      // with list() fallback inside readBlobJson.
       const blobMap = new Map();
-      if (token) {
-        try {
-          const { list } = require('@vercel/blob');
-          const { blobs } = await list({ prefix: 'catalogs/', token });
-          const catalogBlobs = (blobs || []).filter((b) =>
-            b.pathname.endsWith('.json') && !b.pathname.includes('/_')
-          );
-          await Promise.allSettled(
-            catalogBlobs.map(async (b) => {
-              try {
-                const fRes = await fetch(b.url);
-                if (!fRes.ok) return;
-                const data = await fRes.json();
-                const id = b.pathname.replace(/^catalogs\//, '').replace(/\.json$/, '');
-                blobMap.set(id, {
-                  metas: Array.isArray(data.metas) ? data.metas : [],
-                  builtAt: data.builtAt || null,
-                });
-              } catch (e) {}
-            })
-          );
-        } catch (err) {
-          console.log(`[binge-addon] blob prefix list fallback error: ${err.message}`);
-        }
-      }
+      await Promise.allSettled(
+        Object.keys(cfg.catalogs || {}).map(async (id) => {
+          try {
+            const file = await readCatalogMeta(id);
+            if (file) blobMap.set(id, { metas: file.metas, builtAt: file.builtAt || null });
+          } catch (e) {}
+        })
+      );
 
       const allIds = Object.keys(cfg.catalogs || {});
       for (const id of allIds) {

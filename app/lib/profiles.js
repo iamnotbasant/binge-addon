@@ -192,20 +192,15 @@ function invalidateProfilesCache() { cache = null; }
 
 async function readProfiles() {
   if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.value;
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  // v1.2.8: direct public-URL read (SIMPLE request) with list()
+  // fallback inside readBlobJson.
   let doc = defaultProfiles();
-  if (token) {
-    try {
-      const { list } = require('@vercel/blob');
-      const { blobs } = await list({ prefix: PROFILES_KEY, token });
-      const file = blobs.find((b) => b.pathname === PROFILES_KEY);
-      if (file) {
-        const res = await fetch(file.url);
-        if (res.ok) doc = normalizeProfiles(await res.json());
-      }
-    } catch (e) {
-      console.log(`[binge-addon] profiles read failed, using defaults: ${e.message}`);
-    }
+  try {
+    const { readBlobJson } = require('./blob');
+    const json = await readBlobJson(PROFILES_KEY);
+    if (json) doc = normalizeProfiles(json);
+  } catch (e) {
+    console.log(`[binge-addon] profiles read failed, using defaults: ${e.message}`);
   }
   cache = { at: Date.now(), value: doc };
   return doc;
