@@ -20,6 +20,7 @@ const { addonBuilder, getRouter } = require('stremio-addon-sdk');
 const { MANIFEST } = require('./lib/manifest');
 const { fetchAllStreams, mergeStreamResults } = require('./lib/sources');
 const { formatStream } = require('./lib/parse');
+const { runWithRequest, isWindowsClient } = require('./lib/request-context');
 const { readCatalog, readCatalogMeta, readIdMap } = require('./lib/store');
 const { buildMetaFromTmdb } = require('./lib/meta');
 const { searchCatalogs } = require('./lib/search');
@@ -27,7 +28,7 @@ const { readConfig, writeConfig, effectiveCatalogs, normalizeConfig } = require(
 
 const STREAM_CAP = 40;
 const ADDON_NAME = 'binge-addon';
-const VERSION = '1.1.7';
+const VERSION = '1.1.8';
 
 const builder = new addonBuilder(MANIFEST);
 
@@ -78,9 +79,15 @@ builder.defineStreamHandler(async ({ type, id }) => {
   // v1.1.5 blueprint: season/episode come from the request id
   // (authoritative) and are threaded into formatStream for the
   // 🎬 line 1 (🍂 Sxx 🎞️ Exx); movies have no S/E part.
+  // v1.1.8: Windows clients get 2-letter language codes in the Audio
+  // line instead of flag emojis (Windows renders 🇮🇳/🇬🇧 as bare
+  // "IN"/"GB" letters); every other client keeps the flags.
   const se = id.match(/^tt\d+:(\d+):(\d+)$/);
-  const streams = parsed.map((p) => formatStream(p, se
-    ? { season: parseInt(se[1], 10), episode: parseInt(se[2], 10) } : {}));
+  const useTextLangs = isWindowsClient();
+  const streams = parsed.map((p) => formatStream(p, {
+    ...(se ? { season: parseInt(se[1], 10), episode: parseInt(se[2], 10) } : {}),
+    useTextLangs,
+  }));
   console.log(`[binge-addon] stream ${type}/${id}: returning ${streams.length} ${usedCam ? 'CAM fallback' : 'clean'} streams`);
   return { streams };
 });
@@ -153,6 +160,11 @@ builder.defineMetaHandler(async ({ type, id }) => {
 
 const app = express();
 app.use(express.json({ limit: '200kb' }));
+
+// v1.1.8: per-request context (User-Agent) for the stream handler — the
+// SDK router never passes the raw request to handlers, so the UA is
+// captured here in AsyncLocalStorage before any route runs.
+app.use((req, res, next) => runWithRequest(req, next));
 
 // --- Dynamic manifest (v2.1.0): the SDK router would serve the static
 // manifest; this route runs first and applies the dashboard config

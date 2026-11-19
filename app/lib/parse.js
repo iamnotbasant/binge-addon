@@ -417,6 +417,18 @@ for (const [flag, lang] of Object.entries(FLAG_LANG)) {
   if (!LANG_FLAG[lang]) LANG_FLAG[lang] = flag;
 }
 
+// Two-letter language codes for the Windows variant (v1.1.8): Windows
+// Chromium/WebView renders flag emojis as bare "IN"/"GB" letters, so
+// Windows clients get ISO 639-1 codes instead of flags (HI/EN/...).
+// Every LANG_LABEL language is covered; the display falls back to the
+// flag when a code is ever missing — never a blank.
+const LANG_CODE = {
+  hindi: 'HI', english: 'EN', tamil: 'TA', telugu: 'TE', malayalam: 'ML',
+  kannada: 'KN', bengali: 'BN', marathi: 'MR', gujarati: 'GU', punjabi: 'PA',
+  korean: 'KO', russian: 'RU', japanese: 'JA', chinese: 'ZH', spanish: 'ES',
+  french: 'FR', german: 'DE', thai: 'TH', vietnamese: 'VI',
+};
+
 // Addon display name per source (provider line, blueprint format v1.1.5).
 const PROVIDER_LABEL = { torrentio: 'Torrentio', comet: 'Comet', hdhub: 'HdHub' };
 
@@ -912,9 +924,16 @@ function formatStream(p, opts = {}) {
   // the single flag-priority set — so the line can never contradict
   // itself. Identical flags collapse to one (four Indian languages all
   // fly 🇮🇳 — "🇮🇳 / 🇮🇳 / 🇮🇳 / 🇮🇳" would look broken).
+  // v1.1.8: Windows clients (opts.useTextLangs, set from the request
+  // User-Agent in app/index.js) get 2-letter codes instead of flags —
+  // "🌐 HI / EN" — because Windows renders 🇮🇳/🇬🇧 as bare "IN"/"GB"
+  // letters. Every other client keeps the flags byte-identical.
   const audioLangs = p.audioLangs
     || new Set([...p.langs].filter((l) => LANG_LABEL[l]));
-  const flags = [...new Set(orderLangs(audioLangs).map((l) => LANG_FLAG[l]).filter(Boolean))].join(' / ');
+  const langTokens = orderLangs(audioLangs)
+    .map((l) => (opts.useTextLangs ? (LANG_CODE[l] || LANG_FLAG[l]) : LANG_FLAG[l]))
+    .filter(Boolean);
+  const flags = [...new Set(langTokens)].join(' / ');
   let line3 = '';
   if (p.audio.length) {
     line3 = `🎧 ${p.audio[0]}`;
