@@ -109,14 +109,17 @@ async function writeConfig(cfg) {
 }
 
 // Effective manifest catalog list after config: enabled only, renamed,
-// reordered by `order`. Returns [{ type, id, name }].
+// reordered by `order`. Returns [{ type, id, name, extra }].
+// v1.1.7: `extra` (search) is carried through — dropping it here would
+// strip search from the served /manifest.json even though the static
+// MANIFEST declares it.
 function effectiveCatalogs(cfg) {
   const list = defaultCatalogList().map((c) => {
     const o = (cfg.catalogs && cfg.catalogs[c.id]) || {};
-    return { type: c.type, id: c.id, name: o.name || c.name, enabled: o.enabled !== false, order: typeof o.order === 'number' ? o.order : 999 };
+    return { type: c.type, id: c.id, name: o.name || c.name, extra: c.extra, enabled: o.enabled !== false, order: typeof o.order === 'number' ? o.order : 999 };
   });
   return list.filter((c) => c.enabled).sort((a, b) => a.order - b.order)
-    .map(({ type, id, name }) => ({ type, id, name }));
+    .map(({ type, id, name, extra }) => ({ type, id, name, ...(extra ? { extra } : {}) }));
 }
 
 function knob(cfg, rowKey, field, def) {

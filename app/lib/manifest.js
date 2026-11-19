@@ -9,7 +9,16 @@
 
 function catalogs() {
   const list = [];
-  const push = (id, name, type) => list.push({ type, id, name });
+  // v1.1.7: every catalog is searchable (`extra: search`, not required
+  // so rows still serve as Board/Discover feeds). Search queries TMDB
+  // live (lib/search.js) — it does NOT filter the fixed rows, because
+  // a title like Reacher is in none of them. Verified shape against
+  // stremio-addon-sdk 1.6.10 docs/api/responses/manifest.md:
+  // "If your catalog supports full text searching, set
+  // `extra: [{ name: "search", isRequired: false }]`".
+  const push = (id, name, type) => list.push({
+    type, id, name, extra: [{ name: 'search', isRequired: false }],
+  });
   // #1 Trending in India
   push('trending-indian-movie', 'Trending in India', 'movie');
   push('trending-indian-series', 'Trending in India', 'series');
@@ -62,7 +71,7 @@ function catalogs() {
 
 const MANIFEST = {
   id: 'com.bharatstreams',
-  version: '1.1.6',
+  version: '1.1.7',
   name: 'Binge Addon',
   description:
     'Free Hindi-first Indian catalogs and streams. Trending India + Worldwide, Fresh Digital Drops, Latest Indian Movies & Web Series, Releasing Next 30 Days, Big Announcements 2026–2027, Now in Theatres, South Blockbusters, Dark Crime, Underrated Gems, Sci-Fi & Time Travel, Thrillers, Action, Mini-Series, Visual Spectacles, Anime and All-Time Classics, with Hindi 1080p streams first. This product uses the TMDB API but is not endorsed or certified by TMDB.',

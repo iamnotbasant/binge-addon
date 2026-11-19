@@ -22,20 +22,32 @@ const { fetchAllStreams, mergeStreamResults } = require('./lib/sources');
 const { formatStream } = require('./lib/parse');
 const { readCatalog, readCatalogMeta, readIdMap } = require('./lib/store');
 const { buildMetaFromTmdb } = require('./lib/meta');
+const { searchCatalogs } = require('./lib/search');
 const { readConfig, writeConfig, effectiveCatalogs, normalizeConfig } = require('./lib/config');
 
 const STREAM_CAP = 40;
 const ADDON_NAME = 'binge-addon';
-const VERSION = '1.1.6';
+const VERSION = '1.1.7';
 
 const builder = new addonBuilder(MANIFEST);
 
 // --- Catalog handler (§6.3): reads prebuilt rows from Vercel Blob.
 // A catalog disabled in the dashboard serves { metas: [] }.
-builder.defineCatalogHandler(async ({ type, id }) => {
+// v1.1.7: a search request (extra.search, the Stremio path-extra form
+// `/catalog/<type>/<id>/search=<query>.json`) queries TMDB LIVE via
+// lib/search.js — NOT the fixed rows, which may not contain the title
+// at all (e.g. Reacher). Empty/unknown queries return empty metas,
+// never the full row. The no-search path below is byte-identical to
+// v1.1.6 behaviour.
+builder.defineCatalogHandler(async ({ type, id, extra }) => {
   const cfg = await readConfig();
   if (cfg.catalogs && cfg.catalogs[id] && cfg.catalogs[id].enabled === false) {
     return { metas: [], cacheMaxAge: 3600, staleError: 3600 };
+  }
+  const q = extra && typeof extra.search === 'string' ? extra.search.trim() : '';
+  if (q) {
+    const { metas } = await searchCatalogs(type, q);
+    return { metas, cacheMaxAge: 3600, staleError: 3600 };
   }
   const metas = await readCatalog(id);
   if (!metas) {
@@ -383,6 +395,31 @@ app.all('/api/cron/rebuild', async (req, res) => {
 // --- Admin rebuild endpoint: POST /api/admin/rebuild (manual dashboard rebuild).
 // Uses dedicated rebuild handler with X-Admin-Password gate and 300s budget.
 app.all('/api/admin/rebuild', require('./api/admin/rebuild'));
+
+// --- Catalog search, `?search=` query form (v1.1.7).
+// The SDK router only parses search from the path-extra segment
+// (`/catalog/<type>/<id>/search=<query>.json`); a plain query string
+// (`/catalog/<type>/<id>.json?search=<query>`) would otherwise reach
+// the handler as a feed request and return the unfiltered row —
+// exactly the bug basant reported. This route runs BEFORE the SDK
+// router, handles only requests carrying a non-empty `search` param
+// (disabled catalogs still serve empty), and passes everything else
+// through with next() so the feed path is untouched.
+app.get('/catalog/:type/:id.json', async (req, res, next) => {
+  const q = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+  if (!q) return next();
+  try {
+    const cfg = await readConfig();
+    if (cfg.catalogs && cfg.catalogs[req.params.id] && cfg.catalogs[req.params.id].enabled === false) {
+      return res.json({ metas: [] });
+    }
+    const { metas } = await searchCatalogs(req.params.type, q);
+    res.json({ metas });
+  } catch (e) {
+    console.log(`[binge-addon] catalog ?search= failed: ${e.message}`);
+    res.json({ metas: [] });
+  }
+});
 
 app.use(getRouter(builder.getInterface()));
 
