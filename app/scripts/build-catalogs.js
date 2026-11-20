@@ -1513,9 +1513,15 @@ async function buildRows(type, key, idMap, stats, ctx) {
 // are NOT written any more; they stay in Blob as a frozen read
 // fallback. A failed put writes nothing, so yesterday's bundle keeps
 // serving — the same invariant as the old per-row writes.
+//
+// v1.6.1: the write goes to GITHUB first (lib/github-store.js — the
+// Blob store is blocked since 20 Nov 2026, Advanced Ops 2,102/2,000)
+// whenever GITHUB_TOKEN is set; Blob is the fallback when there is no
+// token or the commit fails. Never throws: when both backends fail
+// the rebuild logs it and continues (buzz state + prune still run);
+// the cron reports backend:'none' so the failure is visible.
 async function writeBundle(rows, idMap, summary, builtAt, token) {
   const { buildBundle, shouldSkipPut, readBundle, BUNDLE_KEY } = require('../lib/bundle');
-  const { put } = require('@vercel/blob');
   const shapedRows = Object.fromEntries(
     Object.entries(rows).map(([id, metas]) => [id, { metas, builtAt }])
   );
@@ -1527,13 +1533,33 @@ async function writeBundle(rows, idMap, summary, builtAt, token) {
     console.log(`[build-catalogs] could not read previous bundle, writing anyway: ${e.message}`);
   }
   if (shouldSkipPut(prev, bundle.hash)) {
-    console.log(`[build-catalogs] bundle unchanged (hash ${bundle.hash.slice(0, 8)}), skipping put — 0 Advanced requests today`);
+    console.log(`[build-catalogs] bundle unchanged (hash ${bundle.hash.slice(0, 8)}), skipping write — 0 requests today`);
     return { skipped: true, hash: bundle.hash };
   }
-  await put(BUNDLE_KEY, JSON.stringify(bundle), {
-    access: 'public', token, addRandomSuffix: false, allowOverwrite: true,
-  });
-  return { skipped: false, hash: bundle.hash };
+  const ghToken = process.env.GITHUB_TOKEN;
+  if (ghToken) {
+    try {
+      const { commitGitHubJson, GH_BUNDLE_PATH } = require('../lib/github-store');
+      const r = await commitGitHubJson(GH_BUNDLE_PATH, bundle, `chore: rebuild catalog bundle ${builtAt}`, ghToken);
+      if (r.ok) {
+        console.log(`[build-catalogs] bundle committed to GitHub (${r.created ? 'created' : 'updated'}, hash ${bundle.hash.slice(0, 8)})`);
+        return { skipped: false, hash: bundle.hash, backend: 'github' };
+      }
+      console.log(`[build-catalogs] github bundle commit failed (${r.reason}), falling back to Blob`);
+    } catch (e) {
+      console.log(`[build-catalogs] github bundle commit threw (${e.message}), falling back to Blob`);
+    }
+  }
+  try {
+    const { put } = require('@vercel/blob');
+    await put(BUNDLE_KEY, JSON.stringify(bundle), {
+      access: 'public', token, addRandomSuffix: false, allowOverwrite: true,
+    });
+    return { skipped: false, hash: bundle.hash, backend: 'blob' };
+  } catch (e) {
+    console.log(`[build-catalogs] bundle write failed on every backend (github + blob): ${e.message} — yesterday's rows keep serving`);
+    return { skipped: false, hash: bundle.hash, backend: 'none', error: String(e.message).slice(0, 200) };
+  }
 }
 
 // v1.2.9: the idmap lives inside the bundle; the legacy _idmap.json
@@ -1590,15 +1616,23 @@ async function seedBuzzStateFromTrending(trendMetas, type, key, today, floor) {
   return out;
 }
 
-// v1.5.6: buzz carry-over state (buzz-state.json in Blob root).
-// Read by direct public URL (SIMPLE request) — deliberately NOT
-// readBlobJson: a corrupt state file must return null WITHOUT tripping
-// blob.js's directBroken flag (which would poison the bundle read
-// that follows). Any failure — missing file, bad JSON, wrong shape —
-// returns null and the buzz section seeds from trending instead.
-// Never throws.
+// v1.5.6: buzz carry-over state (buzz-state.json).
+// v1.6.1: GitHub raw FIRST (Blob store blocked since 20 Nov 2026),
+// Blob direct URL second. Read by direct public URL (SIMPLE request)
+// — deliberately NOT readBlobJson: a corrupt state file must return
+// null WITHOUT tripping blob.js's directBroken flag (which would
+// poison the bundle read that follows). Any failure — missing file,
+// bad JSON, wrong shape — returns null and the buzz section seeds
+// from trending instead. Never throws.
 async function readBuzzState(fetchImpl) {
   const f = fetchImpl || global.fetch;
+  try {
+    const { readGitHubJson, GH_BUZZ_PATH } = require('../lib/github-store');
+    const gh = await readGitHubJson(GH_BUZZ_PATH, f);
+    if (gh) return validateBuzzState(gh);
+  } catch (e) {
+    // fall through to Blob
+  }
   try {
     const { publicBaseUrl } = require('../lib/blob');
     const res = await f(`${publicBaseUrl()}/${BUZZ_STATE_PATHNAME}`);
@@ -1610,12 +1644,23 @@ async function readBuzzState(fetchImpl) {
   }
 }
 
-// Write the updated state (one put per rebuild — the state changes
-// daily by design, so there is no hash-skip; ~30 Advanced requests a
-// month, on top of the bundle's ~1/day). Never throws: a failed state
-// write must never fail the rebuild — tomorrow's run re-derives from
-// the last good state (or re-seeds).
+// Write the updated state. v1.6.1: GitHub first (see writeBundle),
+// Blob as the fallback — one write per rebuild, the state changes
+// daily by design, so there is no hash-skip. Never throws: a failed
+// state write must never fail the rebuild — tomorrow's run re-derives
+// from the last good state (or re-seeds).
 async function writeBuzzState(state, token) {
+  const ghToken = process.env.GITHUB_TOKEN;
+  if (ghToken) {
+    try {
+      const { commitGitHubJson, GH_BUZZ_PATH } = require('../lib/github-store');
+      const r = await commitGitHubJson(GH_BUZZ_PATH, state, 'chore: update buzz state', ghToken);
+      if (r.ok) return true;
+      console.log(`[build-catalogs] github buzz state commit failed (${r.reason}), falling back to Blob`);
+    } catch (e) {
+      console.log(`[build-catalogs] github buzz state commit threw (${e.message}), falling back to Blob`);
+    }
+  }
   try {
     const { put } = require('@vercel/blob');
     await put(BUZZ_STATE_PATHNAME, JSON.stringify(state), {
@@ -1668,9 +1713,10 @@ async function main() {
     return { skipped: true };
   }
   const token = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!token) {
-    console.log('[build-catalogs] no BLOB_READ_WRITE_TOKEN, cannot write rows — aborting (yesterday\'s rows keep serving)');
-    return { skipped: true, reason: 'no-blob-token' };
+  const ghToken = process.env.GITHUB_TOKEN;
+  if (!token && !ghToken) {
+    console.log('[build-catalogs] no BLOB_READ_WRITE_TOKEN and no GITHUB_TOKEN, cannot write rows — aborting (yesterday\'s rows keep serving)');
+    return { skipped: true, reason: 'no-write-token' };
   }
   const stats = { excludedNoImdb: 0, excludedTvShow: { total: 0, byReason: {}, names: [] }, trendingTopUp: {} };
   const { readConfig } = require('../lib/config');
@@ -1756,7 +1802,10 @@ async function main() {
       let exists = false;
       try {
         const head = await fetch(`${publicBaseUrl()}/${pathname}`, { method: 'HEAD' });
-        exists = head.status !== 404;
+        // v1.6.1: only a 200 means the file exists. A blocked store
+        // answers 403 on every HEAD — that must NOT trigger a del
+        // attempt (a failed del still costs an Advanced request).
+        exists = head.status === 200;
       } catch (e) { exists = false; }
       if (!exists) continue;
       try {

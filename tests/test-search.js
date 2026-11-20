@@ -170,7 +170,7 @@ function stubFetchFactory(searchResults, imdbMap, failIds = []) {
   // ---------------------------------------------------------------------------
   console.log('=== 3. Manifest (search extra) ===');
   {
-    eq(MANIFEST.version, '1.6.0', 'manifest version 1.6.0');
+    eq(MANIFEST.version, '1.6.1', 'manifest version 1.6.1');
     eq(catalogs().length, 18, '18 catalogs');
     check(catalogs().every((c) => Array.isArray(c.extra) && c.extra.length === 1
       && c.extra[0].name === 'search' && c.extra[0].isRequired === false),

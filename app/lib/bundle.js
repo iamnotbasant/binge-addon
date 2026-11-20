@@ -31,12 +31,14 @@
 // The bundle keeps everything in the one store that already works,
 // adds no credential, no service, no deploy, and no CDN semantics.
 //
-// Safety: readers try the bundle FIRST, then fall back to the legacy
-// per-row files (catalogs/<id>.json, _idmap.json, _summary.json),
-// which stay in Blob as a frozen safety net — they are simply no
-// longer written. A missing/wrong bundle can never break reads; it
-// just serves yesterday's rows, exactly as a failed rebuild does
-// today. The old files cost ~500KB of the 1GB storage allowance.
+// v1.6.1 (20 Nov 2026): the Blob store is BLOCKED — Vercel returned
+// HTTP 403 "Your store is blocked" on every read from ~20:42 IST
+// (Hobby Advanced Operations 2,102/2,000; access resumes 12/20/26).
+// Reads now try GitHub raw FIRST (free, no quota, public repo — see
+// lib/github-store.js) and keep Blob as the fallback, so rows serve
+// again as soon as the rebuild commits the bundle to GitHub. The
+// 19 Nov rejection of GitHub (commit-token problem) no longer applies:
+// basant approved the token step on 20 Nov 2026.
 
 'use strict';
 
@@ -72,20 +74,32 @@ function shouldSkipPut(prevBundle, hash) {
   return !!(prevBundle && typeof prevBundle.hash === 'string' && prevBundle.hash === hash);
 }
 
-// Read the bundle by direct public URL (SIMPLE request) with the
-// list() fallback inside readBlobJson. Returns the parsed bundle
-// object, or null when it does not exist / is unreadable. Never throws.
+// Read the bundle: GitHub raw FIRST (v1.6.1 — Blob is blocked),
+// then the Blob direct-URL read with its list() fallback. Returns
+// the parsed bundle object, or null when it does not exist / is
+// unreadable anywhere. Never throws.
 async function readBundle() {
   if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.value;
   let value = null;
   try {
-    const { readBlobJson } = require('./blob');
-    const json = await readBlobJson(BUNDLE_KEY);
+    const { readGitHubJson, GH_BUNDLE_PATH } = require('./github-store');
+    const json = await readGitHubJson(GH_BUNDLE_PATH);
     if (json && typeof json === 'object' && json.rows && typeof json.rows === 'object') {
       value = json;
     }
   } catch (e) {
-    console.log(`[binge-addon] bundle read failed: ${e.message}`);
+    console.log(`[binge-addon] github bundle read failed: ${e.message}`);
+  }
+  if (!value) {
+    try {
+      const { readBlobJson } = require('./blob');
+      const json = await readBlobJson(BUNDLE_KEY);
+      if (json && typeof json === 'object' && json.rows && typeof json.rows === 'object') {
+        value = json;
+      }
+    } catch (e) {
+      console.log(`[binge-addon] bundle read failed: ${e.message}`);
+    }
   }
   cache = { at: Date.now(), value };
   return value;
