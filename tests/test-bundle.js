@@ -34,6 +34,20 @@ function check(cond, label) {
 
 const savedEnv = { ...process.env };
 
+// v1.6.1 (20 Nov 2026): readBundle tries GitHub FIRST, so once a REAL
+// bundle exists on GitHub raw (it landed 20 Nov ~21:03 IST), the live
+// GitHub read shadows the fixture Blob host in §2/§3/§5 and all ten
+// network checks fail. Keep this test hermetic: GitHub URLs always
+// 404 here, everything else goes to the real fetch (the fixture host).
+const realFetch = global.fetch;
+global.fetch = async (url, opts) => {
+  const u = String(url);
+  if (u.includes('githubusercontent.com') || u.includes('api.github.com')) {
+    return { ok: false, status: 404, json: async () => ({}) };
+  }
+  return realFetch(url, opts);
+};
+
 async function withEnvAsync(patch, fn) {
   for (const k of ['BLOB_PUBLIC_BASE_URL', 'BLOB_READ_WRITE_TOKEN']) delete process.env[k];
   Object.assign(process.env, patch);
