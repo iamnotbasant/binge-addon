@@ -54,6 +54,24 @@
 // three filter layers. No vote floor (TMDB rates a Bigg Boss season
 // page 3.7/10, 11 votes — any floor would kill the very title the row
 // exists for). 1 change.
+//
+// v1.5.8 (20 Nov 2026): fresh rows go same-day — a new season or a new
+// movie lands in the fresh rows on its release day, newest first.
+// (1) New Releases — Series counts RETURNING seasons: the effective
+// date is the latest season's premiere (v1.3.3 returning-season detail
+// check, past 45-day window), so Dhindora S2 (premieres 20 Nov 2026,
+// first aired 14 Oct 2021) finally appears. No vote floor on the
+// returning pass — show-level votes describe old seasons, not the new
+// one (same no-floor call as the Releasing row). (2) Day-1 movies
+// bypass the va/vote_count floors: titles released in the last 7 days
+// enter New Releases — Movies and Fresh Digital Drops with no rating
+// floor (still need an IMDb id + a poster). Older titles in the 45-day
+// window keep the existing floors. (3) Sort is effective-date desc in
+// both fresh rows, so the freshest title is #1. Fresh Digital Drops
+// stays MOVIE-only (one catalog cannot mix movie + series) — series
+// freshness lives in New Releases — Series. 1 change. Evening rebuild
+// (19:00 IST, second Vercel cron) added in the same change so a
+// same-day release is picked up the same evening.
 
 'use strict';
 
@@ -114,6 +132,11 @@ const NEW_REL_MIN_VOTES_SERIES = 25; // v1.3.1 worldwide-SERIES vote_count
 // floor left only 8 series worldwide (second v1.3.1 rebuild). Movies
 // stay at 100 (their row fills 20/20 there). vote_average stays 6.5.
 const NEW_REL_INDIAN_TARGET = 10;   // v1.3.1 reserved Indian slots per row
+const NEW_REL_FRESH_DAYS = 7;       // v1.5.8 fresh path: titles released
+// in the last 7 days bypass the va/vote_count floors in New Releases —
+// Movies and Fresh Digital Drops (a day-1 title has no votes yet).
+// They still need an IMDb id + a poster; older titles in the 45-day
+// window keep the existing floors.
 const REL_NEXT_INDIAN_TARGET = 10;  // v1.3.3 reserved Indian slots in the
 // Releasing Next 30 Days movie row (same 10/10 split as v1.3.1).
 const REL_NEXT_PREMIERE_TARGET = 10; // v1.3.3 reserved new-premiere slots
@@ -279,6 +302,17 @@ function isoDate(d) {
 
 function daysFromNow(n) {
   return new Date(Date.now() + n * 24 * 60 * 60 * 1000);
+}
+
+// v1.5.8: fresh-path date check — is `dateStr` (YYYY-MM-DD) within the
+// last `days` days up to and including `todayStr`? Pure, exported for
+// tests. A future date is never fresh.
+function isFreshDate(dateStr, todayStr, days) {
+  if (!dateStr || !todayStr) return false;
+  const d = dateStr.slice(0, 10);
+  if (d > todayStr) return false;
+  const from = new Date(todayStr + 'T00:00:00Z').getTime() - days * 24 * 60 * 60 * 1000;
+  return new Date(d + 'T00:00:00Z').getTime() >= from;
 }
 
 function toMeta(item, type, imdbId) {
@@ -488,6 +522,31 @@ function digitalReleaseDate(detail, from, to) {
   return latest;
 }
 
+// v1.5.8: latest season premiere — the effective "release date" of a
+// series for the New Releases row. Returns the LATEST season premiere
+// date (YYYY-MM-DD) inside [from, to], or null. Candidates: a next
+// episode that is a season premiere (SxxE01) and any season (number
+// >= 1) whose air_date is in the window — both are TMDB data, never
+// invented; season 0 (Specials) is excluded. Same two signals as the
+// v1.3.3 Releasing-row checkReturning, but taking the max date instead
+// of the first hit (a show with S2 in October and S3 in November is a
+// November release). Pure, exported for tests.
+function latestSeasonPremiere(detail, from, to) {
+  if (!detail) return null;
+  let latest = null;
+  const next = detail.next_episode_to_air;
+  if (next && next.air_date && next.episode_number === 1) {
+    const d = next.air_date.slice(0, 10);
+    if (d >= from && d <= to) latest = d;
+  }
+  for (const s of detail.seasons || []) {
+    if ((s.season_number || 0) < 1) continue;
+    const d = (s.air_date || '').slice(0, 10);
+    if (d && d >= from && d <= to && (!latest || d > latest)) latest = d;
+  }
+  return latest;
+}
+
 // --- v2.0: keyword resolution (#19) ---
 // Resolve each term via /search/keyword at build time. Takes the first
 // result whose name matches the term exactly (case-insensitive) —
@@ -661,6 +720,7 @@ async function buildRows(type, key, idMap, stats, ctx) {
   // votes slower than movies, so the 100 floor left only 8 series
   // worldwide (second rebuild).
   const newRelFrom = isoDate(daysFromNow(-newRelDays));
+  const newRelFreshFrom = isoDate(daysFromNow(-NEW_REL_FRESH_DAYS));
   const newRelDateField = isMovie ? 'primary_release_date' : 'first_air_date';
   const newRelKept = [];
   const newRelSeen = new Set();
@@ -697,8 +757,85 @@ async function buildRows(type, key, idMap, stats, ctx) {
     }
     return got;
   }
-  const newRelIndian = await newRelPass(true, NEW_REL_INDIAN_TARGET);
-  const newRelGlobal = await newRelPass(false, ROW_CAP - newRelIndian.length);
+  // v1.5.8 fresh path (movies only): discover WITHOUT the vote filters,
+  // primary_release_date in the last 7 days. A title released today has
+  // no votes yet, so the rated pass can never see it; the fresh pass
+  // lets it in on IMDb id + poster alone. Poster is required here (the
+  // rated path never enforced one — unchanged).
+  async function newRelFreshPass(wantIndian, target) {
+    const got = [];
+    for (let p = 1; p <= 2 && got.length < target; p++) {
+      const page = await tmdb(path, key, {
+        sort_by: 'primary_release_date.desc',
+        ...(wantIndian ? { with_origin_country: 'IN' } : {}),
+        'primary_release_date.lte': todayStr,
+        'primary_release_date.gte': newRelFreshFrom,
+        page: p,
+      });
+      const fresh = (page.results || []).filter((it) => !newRelSeen.has(it.id));
+      if (!fresh.length) continue;
+      const made = await mapLimit(fresh, CONCURRENCY, async (item) => {
+        if (!wantIndian && isIndianTitle(item)) return null;
+        if (!item.poster_path) return null;
+        const imdbId = await resolveImdb(type, item.id, key, idMap);
+        if (!imdbId) { stats.excludedNoImdb++; return null; }
+        return { meta: toMeta(item, type, imdbId), date: (item.release_date || '').slice(0, 10), indian: wantIndian, fresh: true };
+      });
+      for (let i = 0; i < fresh.length; i++) {
+        newRelSeen.add(fresh[i].id);
+        if (got.length >= target) break;
+        if (made[i]) got.push(made[i]);
+      }
+    }
+    return got;
+  }
+  // v1.5.8 returning seasons (series only): shows whose LATEST season
+  // premiered in the 45-day window — the v1.3.3 Releasing-row mechanism
+  // (discover by air_date window + latestSeasonPremiere detail check),
+  // two sub-passes: global with_status=0, Indian origin-IN with no
+  // status filter (TMDB status is stale for Indian web series — the B2
+  // precedent). NO vote floor on this pass: show-level votes describe
+  // old seasons, not the new one (same no-floor call as the Releasing
+  // row). TV filter + IMDb id still apply. A show claimed by the
+  // premiere pass is never re-added (shared newRelSeen).
+  async function newRelReturningPass(wantIndian, target) {
+    const got = [];
+    const base = wantIndian
+      ? { sort_by: 'popularity.desc', with_origin_country: 'IN', 'air_date.gte': newRelFrom, 'air_date.lte': todayStr }
+      : { sort_by: 'popularity.desc', with_status: '0', 'air_date.gte': newRelFrom, 'air_date.lte': todayStr };
+    const maxPages = wantIndian ? 5 : 3;
+    const retSeen = new Set();
+    for (let p = 1; p <= maxPages && got.length < target; p++) {
+      const page = await tmdb('/discover/tv', key, { ...base, page: p });
+      const fresh = (page.results || []).filter((it) => !newRelSeen.has(it.id) && !retSeen.has(it.id));
+      if (!fresh.length) continue;
+      const made = await mapLimit(fresh, CONCURRENCY, async (item) => {
+        if (!wantIndian && isIndianTitle(item)) return null;
+        const res = await resolveSeriesItem(item, key, idMap, seriesCache);
+        if (!res.imdbId) { stats.excludedNoImdb++; return null; }
+        const reason = tvShowExcludeReason(res.detail);
+        if (reason) { noteTvShowExcluded(stats, res.detail, reason); return null; }
+        const airDate = latestSeasonPremiere(res.detail, newRelFrom, todayStr);
+        if (!airDate) return null;
+        return { meta: toMeta(item, 'series', res.imdbId), date: airDate, indian: wantIndian, kind: 'returning' };
+      });
+      for (let i = 0; i < fresh.length; i++) {
+        newRelSeen.add(fresh[i].id);
+        retSeen.add(fresh[i].id);
+        if (got.length >= target) break;
+        if (made[i]) got.push(made[i]);
+      }
+    }
+    return got;
+  }
+  const newRelIndianRated = await newRelPass(true, NEW_REL_INDIAN_TARGET);
+  const newRelIndian = isMovie
+    ? [...newRelIndianRated, ...await newRelFreshPass(true, NEW_REL_INDIAN_TARGET - newRelIndianRated.length)]
+    : [...newRelIndianRated, ...await newRelReturningPass(true, NEW_REL_INDIAN_TARGET - newRelIndianRated.length)];
+  const newRelGlobalRated = await newRelPass(false, ROW_CAP - newRelIndian.length);
+  const newRelGlobal = isMovie
+    ? [...newRelGlobalRated, ...await newRelFreshPass(false, ROW_CAP - newRelIndian.length - newRelGlobalRated.length)]
+    : [...newRelGlobalRated, ...await newRelReturningPass(false, ROW_CAP - newRelIndian.length - newRelGlobalRated.length)];
   const newRelMerged = [...newRelIndian, ...newRelGlobal]
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   const newRelSliced = newRelMerged.slice(0, ROW_CAP);
@@ -707,6 +844,8 @@ async function buildRows(type, key, idMap, stats, ctx) {
     total: newRelSliced.length,
     indian: newRelSliced.filter((x) => x.indian).length,
     worldwide: newRelSliced.filter((x) => !x.indian).length,
+    fresh: newRelSliced.filter((x) => x.fresh).length,
+    returning: newRelSliced.filter((x) => x.kind === 'returning').length,
     newest: newRelSliced.length ? newRelSliced[0].date : null,
     oldest: newRelSliced.length ? newRelSliced[newRelSliced.length - 1].date : null,
     windowDays: newRelDays,
@@ -889,8 +1028,36 @@ async function buildRows(type, key, idMap, stats, ctx) {
       }
       // Candidate cap: 3 discover pages x 20 items = 60 detail calls max.
     }
-    freshKept.sort((a, b) => (b.digitalDate || '').localeCompare(a.digitalDate || ''));
-    rows['fresh-digital-drops'] = freshKept.slice(0, ROW_CAP).map((k) => k.meta);
+    // v1.5.8 fresh path: same digital-date detail check, but the discover
+    // drops the vote_average floor and only scans the last 7 days — a
+    // title digitally released today has no votes yet. Poster required
+    // (pre-filtered here; addMovieDetailPage is shared with #4/#7 and
+    // stays untouched). Dedupe runs through the shared seenFresh set,
+    // so a title the rated pass already kept is never re-fetched.
+    const freshFreshFrom = isoDate(daysFromNow(-NEW_REL_FRESH_DAYS));
+    const freshFreshKept = [];
+    for (let p = 1; p <= 2 && freshFreshKept.length < ROW_CAP; p++) {
+      const page = await tmdb('/discover/movie', key, {
+        sort_by: 'release_date.desc',
+        with_origin_country: 'IN',
+        'release_date.lte': todayStr,
+        'release_date.gte': freshFreshFrom,
+        page: p,
+      });
+      const candidates = (page.results || []).filter((it) => it.poster_path);
+      const kept = await addMovieDetailPage(candidates, seenFresh, key, idMap, movieCache, stats,
+        (detail) => digitalReleaseDate(detail, freshFrom, todayStr) !== null);
+      for (const k of kept) {
+        k.digitalDate = digitalReleaseDate(k.detail, freshFrom, todayStr);
+        k.fresh = true;
+        freshFreshKept.push(k);
+      }
+    }
+    const freshAll = [...freshKept, ...freshFreshKept];
+    freshAll.sort((a, b) => (b.digitalDate || '').localeCompare(a.digitalDate || ''));
+    const freshSliced = freshAll.slice(0, ROW_CAP);
+    stats.freshDigital = { total: freshSliced.length, fresh: freshSliced.filter((k) => k.fresh).length };
+    rows['fresh-digital-drops'] = freshSliced.map((k) => k.meta);
 
     // --- #4 Latest Indian Movies - OTT Ready (movie): Indian movies,
     // digital release yes, last 90 days, sort release date desc. Same
@@ -1605,7 +1772,7 @@ async function main() {
   }
   const counts = Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, v.length]));
   console.log(`[build-catalogs] done. rows=${JSON.stringify(counts)} excludedNoImdb=${stats.excludedNoImdb} excludedTvShow=${JSON.stringify(stats.excludedTvShow)} idMapSize=${Object.keys(idMap).length} bundleSkipped=${bundleResult.skipped} bundleHash=${bundleResult.hash.slice(0, 8)} prunedLegacy=${JSON.stringify(prunedLegacy)}`);
-  return { skipped: false, counts, excludedNoImdb: stats.excludedNoImdb, excludedTvShow: stats.excludedTvShow, ottProviders: stats.ottProviders, trendingTopUp: stats.trendingTopUp, newReleases: stats.newReleases, releasingNext30: stats.releasingNext30, buzz: stats.buzz, indianTvReality: stats.indianTvReality, bundleSkipped: bundleResult.skipped, bundleHash: bundleResult.hash, prunedLegacy };
+  return { skipped: false, counts, excludedNoImdb: stats.excludedNoImdb, excludedTvShow: stats.excludedTvShow, ottProviders: stats.ottProviders, trendingTopUp: stats.trendingTopUp, newReleases: stats.newReleases, freshDigital: stats.freshDigital, releasingNext30: stats.releasingNext30, buzz: stats.buzz, indianTvReality: stats.indianTvReality, bundleSkipped: bundleResult.skipped, bundleHash: bundleResult.hash, prunedLegacy };
 }
 
 if (require.main === module) {
@@ -1615,4 +1782,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main, buildRows, isIndianTitle, collectBuzz, resolveOttProviders, tvShowExcludeReason, applyTvRealityAnchor };
+module.exports = { main, buildRows, isIndianTitle, collectBuzz, resolveOttProviders, tvShowExcludeReason, applyTvRealityAnchor, latestSeasonPremiere, isFreshDate };
