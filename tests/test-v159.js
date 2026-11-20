@@ -1,4 +1,4 @@
-// Binge Addon — v1.5.9 catalog TTL tests (basant, 20 Nov 2026: Nuvio kept
+// Binge Addon — v1.5.9 catalog TTL tests (basant, 20 Nov 2026; version assertions bumped to 1.6.0 by v1.6.0: Nuvio kept
 // showing yesterday's rows — The Body first in New Releases, Ramayana #1
 // in Buzz — while cache-busted fetches showed the new data. Root cause:
 // the catalog success response carried cacheMaxAge 86400 (24h), which
@@ -12,7 +12,7 @@
 //
 // Covers (source-level regression lock on app/index.js — the handler is
 // not unit-testable without booting the server):
-// (0) manifest — version 1.5.9, 18 catalogs, id unchanged;
+// (0) manifest — version 1.6.0, 18 catalogs, id unchanged;
 // (1) catalog success path returns cacheMaxAge 300 / staleError 300;
 // (2) error/empty/search paths still return 3600 / 3600;
 // (3) meta response still returns 86400 / 86400;
@@ -40,7 +40,7 @@ console.log('=== 0. Manifest ===');
 {
   const list = catalogs();
   eq(MANIFEST.id, 'com.bharatstreams', 'manifest id unchanged (no reinstall)');
-  eq(MANIFEST.version, '1.5.9', 'manifest version 1.5.9');
+  eq(MANIFEST.version, '1.6.0', 'manifest version 1.6.0');
   eq(list.length, 18, '18 catalogs (no row added or removed)');
 }
 
@@ -88,5 +88,5 @@ console.log('=== 4. No other 86400 left ===');
     'no other max-age=86400 anywhere in app/index.js');
 }
 
-console.log(fail === 0 ? '\nALL v1.5.9 TESTS PASSED' : `\n${fail} v1.5.9 TEST(S) FAILED`);
+console.log(fail === 0 ? '\nALL v1.6.0 TESTS PASSED' : `\n${fail} v1.6.0 TEST(S) FAILED`);
 process.exit(fail === 0 ? 0 : 1);

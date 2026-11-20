@@ -89,7 +89,7 @@ const LANG_LABEL = {
 // Resolution: highest token wins for the DROP decision (§7.3). A title
 // mentioning both 2160p and 1080p is treated as 2160p and dropped.
 function parseResolution(text) {
-  if (/\b2160p\b|4k\b|uhd\b|\b2160\b/i.test(text)) return 2160;
+  if (/\b2160p\b|(?<![A-Za-z])4k\b|uhd\b|\b2160\b/i.test(text)) return 2160;
   if (/\b1440p\b|\b2k\b/i.test(text)) return 1440;
   if (/\b1080i\b/i.test(text)) return 1080.1; // ranked below 1080p
   if (/\b1080p\b/i.test(text)) return 1080;
@@ -496,7 +496,10 @@ function parseHdHub(stream) {
     langs: parseLanguages(parseText),
     audioLangs: parseAudioLanguages(parseText, cleanText),
     channels: parseChannels(parseText),
-    resolution: parseResolution(parseText),
+    // Resolution from the FILENAME first: HdHub's `name` is only a quality-bucket
+    // label ('HdHub 2160p') and lies — Dhindora's 1080p/720p files all sit under
+    // a '2160p' name. Name is only a fallback when the filename has no token.
+    resolution: parseResolution([filename, langLines].filter(Boolean).join('\n')) ?? parseResolution(name),
     seeders: null, // HTTP direct links carry no seeders
     size: parseSize(desc) || (stream.behaviorHints && stream.behaviorHints.videoSize
       ? { value: stream.behaviorHints.videoSize / 1e9, unit: 'GB' } : null),

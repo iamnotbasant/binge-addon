@@ -1,10 +1,10 @@
-// Binge Addon — v1.5.8 same-day fresh rows tests (basant, 20 Nov 2026; version assertions bumped to 1.5.9 by v1.5.9):
+// Binge Addon — v1.5.8 same-day fresh rows tests (basant, 20 Nov 2026; version assertions bumped to 1.6.0 by v1.6.0):
 // "agar koi season ya movie new release ho to fresh release mai add ho
 // usi din" — a new season or movie must land in the fresh rows on its
 // release day, newest first).
 //
 // Covers, with a stubbed TMDB fetch (no keys, no network):
-// (0) manifest — version 1.5.9, 18 catalogs, new-releases at 2/3,
+// (0) manifest — version 1.6.0, 18 catalogs, new-releases at 2/3,
 //     fresh-digital-drops-movie at 8, NO series version of it;
 // (1) latestSeasonPremiere (direct) — Dhindora shape (S2 today) wins,
 //     old seasons only -> null, newest season wins over an older one,
@@ -46,7 +46,7 @@ console.log('=== 0. Manifest ===');
 {
   const list = catalogs();
   eq(MANIFEST.id, 'com.bharatstreams', 'manifest id unchanged (no reinstall)');
-  eq(MANIFEST.version, '1.5.9', 'manifest version 1.5.9');
+  eq(MANIFEST.version, '1.6.0', 'manifest version 1.6.0');
   eq(list.length, 18, '18 catalogs (no row added or removed)');
   eq(list[2].id, 'new-releases-movie', 'row 3 = New Releases movie');
   eq(list[3].id, 'new-releases-series', 'row 4 = New Releases series');
@@ -320,6 +320,6 @@ async function buildWithStub(type) {
     eq(s.newest, daysAgoStr(0), 'newest = today (the returning season)');
   }
 
-  console.log(fail === 0 ? '\nALL v1.5.9 TESTS PASSED' : `\n${fail} v1.5.9 TEST(S) FAILED`);
+  console.log(fail === 0 ? '\nALL v1.6.0 TESTS PASSED' : `\n${fail} v1.6.0 TEST(S) FAILED`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch((e) => { console.error(e); process.exit(1); });
