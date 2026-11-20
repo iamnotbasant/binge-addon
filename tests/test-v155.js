@@ -64,7 +64,7 @@ const EXPECTED_ORDER = [
 console.log('=== 0. Manifest + config (12 rows removed) ===');
 {
   const list = catalogs();
-  eq(MANIFEST.version, '1.5.8', 'manifest version 1.5.8');
+  eq(MANIFEST.version, '1.5.9', 'manifest version 1.5.9');
   eq(list.length, 18, '18 catalogs (17 + Indian TV & Reality Shows)');
   eq(JSON.stringify(list.map((c) => c.id)), JSON.stringify(EXPECTED_ORDER), 'exact final order (watchable first, upcoming last)');
   check(REMOVED_IDS.every((id) => !list.some((c) => c.id === id)), 'all 12 removed ids gone from manifest');

@@ -29,7 +29,7 @@ const { readProfiles, writeProfiles, resolveProfile, createCustomProfile } = req
 
 const STREAM_CAP = 40;
 const ADDON_NAME = 'binge-addon';
-const VERSION = '1.5.8';
+const VERSION = '1.5.9';
 
 const builder = new addonBuilder(MANIFEST);
 
@@ -55,7 +55,9 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
   if (!metas) {
     return { metas: [], cacheMaxAge: 3600, staleError: 3600 };
   }
-  return { metas, cacheMaxAge: 86400, staleError: 86400 };
+  // v1.5.9 (20 Nov 2026): 5-min catalog TTL — the 24h cacheMaxAge kept
+  // Nuvio showing yesterday's rows (reinstall was the only escape).
+  return { metas, cacheMaxAge: 300, staleError: 300 };
 });
 
 // --- Stream handler (§7): tt… ids only, parallel fan-out, 7 s deadline.

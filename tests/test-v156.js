@@ -44,7 +44,7 @@ const entry = (tmdbId, imdbId, title, lastBuzz, rank) => ({
   // ---------------------------------------------------------------------------
   console.log('=== 0. Manifest ===');
   {
-    eq(MANIFEST.version, '1.5.8', 'manifest version 1.5.8');
+    eq(MANIFEST.version, '1.5.9', 'manifest version 1.5.9');
     eq(catalogs().length, 18, '18 catalogs (17 + Indian TV & Reality Shows)');
   }
 
