@@ -65,7 +65,7 @@ const FRESH_R2 = (host, path) => `https://${host}/${path}?X-Amz-Algorithm=AWS4-H
 
 // --- (0) manifest ---
 console.log('(0) manifest');
-eq(MANIFEST.version, '1.6.3', 'manifest version 1.6.3');
+eq(MANIFEST.version, '1.6.4', 'manifest version 1.6.4');
 eq(MANIFEST.id, 'com.bharatstreams', 'manifest id unchanged');
 eq(catalogs().length, 18, '18 catalogs');
 

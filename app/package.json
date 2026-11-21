@@ -12,5 +12,5 @@
     "build-catalogs": "node scripts/build-catalogs.js",
     "start": "node index.js"
   },
-  "version": "1.6.3"
+  "version": "1.6.4"
 }

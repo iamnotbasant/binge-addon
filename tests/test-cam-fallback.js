@@ -51,7 +51,7 @@ const ramRaw = load('ramayana-torrentio-20261118.json');
 eq(ramRaw.length, 43, 'fixture has the 43 live rows');
 const ram = processSourceStreams('torrentio', ramRaw);
 eq(ram.kept.length, 0, 'zero clean streams kept');
-eq(ram.cam.length, 36, '36 CAM retained (7 Tamil-only CAM rows stay dropped: langDrop)');
+eq(ram.cam.length, 31, '31 CAM retained (7 Tamil-only CAM rows stay dropped: langDrop; v1.6.4: 5 sub-5-seeder CAM rows dropped by the seeder floor)');
 eq(ram.dropped.cam, 43, 'all 43 rows hit the CAM check');
 eq(ram.dropped.langDrop, 7, '7 CAM rows dropped by language verdict');
 check(ram.cam.every((p) => p.isCam === true), 'every retained CAM row tagged isCam');
@@ -62,7 +62,7 @@ eq(ram.cam[0].camKind, 'TeleCine', 'best CAM first: TeleCine');
 
 const ramMerge = mergeStreamResults([{ name: 'torrentio', streams: ram.kept, cam: ram.cam }], 40);
 eq(ramMerge.usedCam, true, 'merge falls back to CAM when clean is empty');
-eq(ramMerge.parsed.length, 28, 'merge returns the 28 UNIQUE CAM streams (v1.6.3: 8 re-upload duplicates merged — 3x 1080p 3.12 GB, 2x 1080p 3.37 GB, 2x 720p 1.14 GB, 2x 720p 1.19 GB, 4x 720p 1.76 GB)');
+eq(ramMerge.parsed.length, 23, 'merge returns the 23 UNIQUE CAM streams (v1.6.3: 8 re-upload duplicates merged — 3x 1080p 3.12 GB, 2x 1080p 3.37 GB, 2x 720p 1.14 GB, 2x 720p 1.19 GB, 4x 720p 1.76 GB; v1.6.4: 5 sub-5-seeder CAM rows dropped by the floor, 28 - 5 = 23)');
 const ramOut = ramMerge.parsed.map(formatStream);
 check(ramOut.every((o) => (o.description.split('\n')[0] || '').includes('CAM')), 'every CAM stream has CAM in its Quality line (first line)');
 check(ramOut.every((o) => !/Note:/.test(o.description)), 'no Note line in any CAM stream description (v1.1.3: Note line removed)');
@@ -101,11 +101,11 @@ const corpus = JSON.parse(fs.readFileSync(
   path.join(__dirname, 'fixtures', 'stream-format-corpus.json'), 'utf8'));
 const dangal = corpus.filter((f) => f.id.startsWith('dangal-torrentio'));
 const dan = processSourceStreams('torrentio', dangal.map((f) => f.raw));
-eq(dan.kept.length, 4, 'all 4 clean rows kept');
+eq(dan.kept.length, 2, 'all 2 clean rows kept (v1.6.4: the 4.38 GB Hon3y and 7.64 GB SAMPA rows have 4 seeders each — dropped by the seeder floor, not by size)');
 eq(dan.cam.length, 0, 'no CAM pool at all');
 const danMerge = mergeStreamResults([{ name: 'torrentio', streams: dan.kept, cam: dan.cam }], 40);
 eq(danMerge.usedCam, false, 'no fallback for a clean-only title');
-eq(danMerge.parsed.length, 4, 'all 4 clean streams returned');
+eq(danMerge.parsed.length, 2, 'all 2 clean streams returned');
 check(!danMerge.parsed.map(formatStream).some((o) => /CAM/.test(o.description)),
   'clean-only output has no CAM marking');
 

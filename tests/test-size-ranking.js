@@ -49,14 +49,18 @@ const sizes = (list) => list.map((p) => (p.size ? `${p.size.value} ${p.size.unit
 console.log('=== 1. Dangal (real corpus, 4 rows) ===');
 const dangal = corpus.filter((f) => f.id.startsWith('dangal-torrentio'));
 const dan = processSourceStreams('torrentio', dangal.map((f) => f.raw));
-eq(dan.kept.length, 4, 'all 4 clean rows kept (nothing dropped for size)');
-eq(sizes(dan.kept).join(','), '2.7 GB,4.38 GB,7.64 GB,32.18 GB',
-  'order: efficient BluRay first, then large, Remux last');
+// v1.6.4: the 4.38 GB Hon3y and 7.64 GB SAMPA rows carry 4 seeders
+// each — the seeder floor drops them (a 4-seeder torrent shows
+// "0 seeds" in Nuvio, proven on RPO). Size still drops nothing:
+// the 2.7 GB efficient BluRay tops and the 32.18 GB Remux stays last.
+eq(dan.kept.length, 2, '2 clean rows kept (4-seeder rows dropped by the v1.6.4 floor, not by size)');
+eq(sizes(dan.kept).join(','), '2.7 GB,32.18 GB',
+  'order: efficient BluRay first, Remux last');
 eq(formatStream(dan.kept[0]).description,
   'Quality: 1080p BluRay\nAudio: Hindi | DD\nSize: 2.7 GB',
   'Dangal top is the 2.7 GB BluRay, NOT the 32.18 GB Remux');
 check(!/Remux/.test(formatStream(dan.kept[0]).description), 'no Remux on top');
-eq(formatStream(dan.kept[3]).description.split('\n')[0], 'Quality: 1080p Remux',
+eq(formatStream(dan.kept[1]).description.split('\n')[0], 'Quality: 1080p Remux',
   'Remux still present, ranked last (re-rank only, never dropped)');
 
 // ---------------------------------------------------------------------------
@@ -105,12 +109,12 @@ eq(formatStream(remuxOnly.kept[0]).description.split('\n')[0], 'Quality: 1080p R
 // ---------------------------------------------------------------------------
 console.log('\n=== 5. Tiny-file guard ===');
 const tiny = processSourceStreams('torrentio', [
-  synth('Movie.2026.1080p.WEB-DL.x264.mkv', 50, '0.5 GB'),
-  synth('Movie.2026.1080p.BluRay.x264.mkv', 2, '2.5 GB'),
+  synth('Movie.2026.1080p.WEB-DL.x264.mkv', 125, '0.5 GB'),
+  synth('Movie.2026.1080p.BluRay.x264.mkv', 5, '2.5 GB'),
 ]);
 eq(formatStream(tiny.kept[0]).description,
   'Quality: 1080p BluRay\nAudio: Hindi\nSize: 2.5 GB',
-  '2.5 GB BluRay beats a 500 MB WEB-DL despite 25x fewer seeders');
+  '2.5 GB BluRay beats a 500 MB WEB-DL despite 25x fewer seeders (5 vs 125; v1.6.4: the BluRay needs ≥5 seeders to survive the floor)');
 eq(sizeClass(tiny.kept[1]), 3, 'the 500 MB row is class 3 (suspiciously tiny)');
 const tinyOnly = processSourceStreams('torrentio', [
   synth('Movie.2026.1080p.WEB-DL.x264.mkv', 3, '0.5 GB'),
@@ -149,12 +153,12 @@ console.log('\n=== 7. Hindi-first / seeders tiebreak / determinism ===');
 const hindiFirst = processSourceStreams('torrentio', [
   { infoHash: 'eng000000001', behaviorHints: { filename: 'Movie.2026.1080p.WEB-DL.x264.mkv' },
     title: 'Movie.2026.1080p.WEB-DL.x264\n👤 50 💾 1.5 GB\n🇬🇧' },
-  synth('Movie.2026.1080p.BluRay.x264.mkv', 1, '3 GB'),
+  synth('Movie.2026.1080p.BluRay.x264.mkv', 5, '3 GB'),
 ]);
 eq(formatStream(hindiFirst.kept[0]).description.split('\n')[2], 'Size: 3 GB',
-  'Hindi 3 GB BluRay still beats English 1.5 GB WEB-DL (language first)');
+  'Hindi 3 GB BluRay still beats English 1.5 GB WEB-DL (language first; v1.6.4: Hindi row has 5 seeders, not 1, so it survives the floor)');
 const tie = processSourceStreams('torrentio', [
-  synth('Movie.2026.1080p.BluRay.x264.mkv', 3, '2 GB'),
+  synth('Movie.2026.1080p.BluRay.x264.mkv', 5, '2 GB'),
   synth('Movie.2026.1080p.BluRay.x265.mkv', 40, '2 GB'),
 ]);
 check(tie.kept[0].seeders === 40, 'same tier + same size: more seeders first');
@@ -194,7 +198,7 @@ check(ram.cam.every((p, i) => i === 0 || ram.cam[i - 1].camRank <= p.camRank),
 // ---------------------------------------------------------------------------
 console.log('\n=== 9. Pushpa 2 tier-first (v1.2.4) ===');
 const pushpa = processSourceStreams('torrentio', [
-  synth('Pushpa.2.2024.1080p.WEBRip.x265.AAC.mkv', 2, '2 GB'),
+  synth('Pushpa.2.2024.1080p.WEBRip.x265.AAC.mkv', 5, '2 GB'),
   synth('Pushpa.2.2024.1080p.WEB-DL.x264.mkv', 10, '2.4 GB'),
   synth('Pushpa.2.2024.1080p.WEBRip.x264.DD.2.0.mkv', 8, '2.57 GB'),
 ]);
@@ -217,7 +221,7 @@ eq(formatStream(largeWeb.kept[0]).description.split('\n')[2], 'Size: 2.01 GB',
   'large-class WEB-DL 5.3 GB does NOT jump the efficient BluRay 2.01 GB (size class still dominates)');
 const webVsHd = processSourceStreams('torrentio', [
   synth('Movie.2026.1080p.HDRip.x264.AAC.mkv', 20, '1.57 GB'),
-  synth('Movie.2026.1080p.WEB-DL.x264.mkv', 3, '2.99 GB'),
+  synth('Movie.2026.1080p.WEB-DL.x264.mkv', 5, '2.99 GB'),
 ]);
 eq(formatStream(webVsHd.kept[0]).description.split('\n')[2], 'Size: 2.99 GB',
   'WEB-DL 2.99 GB tops the smaller HDRip 1.57 GB (Jailer 2 behaviour)');

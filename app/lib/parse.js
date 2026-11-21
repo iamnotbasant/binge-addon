@@ -790,23 +790,31 @@ function processSourceStreams(sourceName, rawStreams, opts = {}) {
     parsed.push(p);
   }
 
-  // 0-seeder rule (§7.4 step 4): drop 0-seeders when a seeded alternative
-  // exists in the same source batch.
-  const hasSeeded = parsed.some((p) => p.seeders !== null && p.seeders >= 1);
+  // v1.6.4 seeder floor (§7.4 step 4): a torrent with 1–4 seeders is
+  // effectively dead — Nuvio shows "0 seeds · 0 peers" for it and it
+  // never opens (RPO 21 Nov: the 2.63 GB WEB-DL had 4 seeders, the
+  // 6.75 GB BluRay 2 — both unplayable). Drop sub-5-seeders when a
+  // ≥5-seeder alternative exists in the same source batch. Fail-open:
+  // if nothing in the batch reaches 5, keep everything (a rare
+  // title's only torrent may have 2 seeders — showing it beats
+  // showing nothing). Unknown seeders (null — no 👤 marker, e.g.
+  // direct HTTP links) are never dropped.
+  const MIN_SEEDERS = 5;
+  const hasWellSeeded = parsed.some((p) => p.seeders !== null && p.seeders >= MIN_SEEDERS);
   let kept = parsed;
-  if (hasSeeded) {
+  if (hasWellSeeded) {
     const before = kept.length;
-    kept = kept.filter((p) => p.seeders !== 0);
-    dropped.zeroSeeder = before - kept.length;
+    kept = kept.filter((p) => p.seeders === null || p.seeders >= MIN_SEEDERS);
+    dropped.lowSeeder = before - kept.length;
   }
 
-  // Same 0-seeder rule inside the cam pool: a 0-seeder CAM goes only when
-  // a seeded CAM exists in the same source batch.
-  const hasSeededCam = cam.some((p) => p.seeders !== null && p.seeders >= 1);
-  if (hasSeededCam) {
+  // Same seeder floor inside the cam pool: a sub-5-seeder CAM goes
+  // only when a ≥5-seeder CAM exists in the same source batch.
+  const hasWellSeededCam = cam.some((p) => p.seeders !== null && p.seeders >= MIN_SEEDERS);
+  if (hasWellSeededCam) {
     const before = cam.length;
-    cam = cam.filter((p) => p.seeders !== 0);
-    dropped.camZeroSeeder = before - cam.length;
+    cam = cam.filter((p) => p.seeders === null || p.seeders >= MIN_SEEDERS);
+    dropped.camLowSeeder = before - cam.length;
   }
 
   kept.sort((x, y) => compareWithProfile(x, y, profileCfg));
