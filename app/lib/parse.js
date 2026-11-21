@@ -695,6 +695,44 @@ function resolutionRank(res) {
 // first (Remux > BluRay > WEB-DL > BDRip > WEBRip > HDRip > HDTV),
 // and smaller size wins only inside the same tier.)
 
+// Expired signed (presigned) direct links (v1.6.3): HdHub serves R2
+// presigned URLs (X-Amz-Date + X-Amz-Expires, 8 h validity) that are
+// often already past expiry by the time basant opens the episode the
+// next morning — R2 answers 403 ExpiredRequest, so the stream is dead
+// on arrival. A link whose expiry is in the past (or within the 5-min
+// margin — it would die mid-tap) is dropped, never shown. Fail-open:
+// a URL without both params, or an unparsable date, is kept — only a
+// provably-dead link is removed.
+const EXPIRED_LINK_MARGIN_MS = 5 * 60 * 1000;
+function isExpiredSignedUrl(url, nowMs) {
+  if (!url || typeof url !== 'string') return false;
+  let dateStr = null; let expStr = null;
+  try {
+    const u = new URL(url);
+    dateStr = u.searchParams.get('X-Amz-Date');
+    expStr = u.searchParams.get('X-Amz-Expires');
+  } catch (e) { return false; }
+  if (!dateStr || !expStr) return false;
+  const m = dateStr.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+  if (!m) return false;
+  const expiresSec = parseInt(expStr, 10);
+  if (!Number.isFinite(expiresSec) || expiresSec < 0) return false;
+  const signedMs = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+  if (!Number.isFinite(signedMs)) return false;
+  const now = typeof nowMs === 'number' ? nowMs : Date.now();
+  return now > signedMs + expiresSec * 1000 - EXPIRED_LINK_MARGIN_MS;
+}
+
+// Source priority (v1.6.3, basant: HdHub first, then torrents): direct
+// HTTP links (HdHub) play instantly and are Hindi-only; torrents need
+// seeders and are often multi-language. Ranked AFTER language and
+// resolution, so Hindi-first and 1080p-first still hold — within the
+// same language + resolution, HdHub outranks Torrentio/Comet.
+const SOURCE_RANK = { hdhub: 0, torrentio: 1, comet: 2 };
+function sourceRank(source) {
+  return SOURCE_RANK[source] !== undefined ? SOURCE_RANK[source] : 3;
+}
+
 // Full pipeline for one source's raw streams: parse -> filter -> sort.
 // Returns { kept: [parsed], cam: [parsed], dropped: { reason: count } }.
 // CAM streams (v1.1.2 last-resort fallback): a row that fails ONLY the
@@ -704,7 +742,7 @@ function resolutionRank(res) {
 // `cam` is sorted best-first: camRank, then compareParsed.
 function processSourceStreams(sourceName, rawStreams, opts = {}) {
   const parse = PARSERS[sourceName] || parseTorrentioLike;
-  const dropped = { noPlayable: 0, over1080: 0, cam: 0, langDrop: 0 };
+  const dropped = { noPlayable: 0, over1080: 0, cam: 0, langDrop: 0, expired: 0 };
   const parsed = [];
   let cam = [];
   // v1.2.7: maxRes is the profile ceiling (desktop/phone 1080, TV
@@ -719,6 +757,10 @@ function processSourceStreams(sourceName, rawStreams, opts = {}) {
 
   for (const s of rawStreams) {
     if (!s || (!s.infoHash && !s.url)) { dropped.noPlayable++; continue; }
+    // v1.6.3: a presigned link already past its expiry is dead on
+    // arrival (R2 403 ExpiredRequest) — drop it before parsing.
+    // opts.nowMs pins "now" for tests; production uses Date.now().
+    if (s.url && isExpiredSignedUrl(s.url, opts.nowMs)) { dropped.expired++; continue; }
     const p = parse(s);
     p.source = sourceName;
     p.raw = s;
@@ -883,6 +925,10 @@ function compareWithProfile(a, b, cfg) {
       const ra = resolutionRankFor(a.resolution, cfg.resolutionOrder);
       const rb = resolutionRankFor(b.resolution, cfg.resolutionOrder);
       if (ra !== rb) return ra - rb;
+    } else if (key === 'source') {
+      const sa = sourceRank(a.source);
+      const sb = sourceRank(b.source);
+      if (sa !== sb) return sa - sb;
     } else if (key === 'sizeClass') {
       const ca = sizeClassRank(a, cfg.sizeClassOrder);
       const cb = sizeClassRank(b, cfg.sizeClassOrder);
@@ -1046,7 +1092,8 @@ function formatStream(p) {
 module.exports = {
   parseLanguages, parseAudioLanguages, parseChannels, parseResolution,
   parseSeeders, parseReleaseGroup, parseDuration, parseReady,
-  parseDebridProvider, durationSeconds,
+  parseDebridProvider, durationSeconds, sizeBytes,
+  isExpiredSignedUrl, sourceRank,
   languageVerdict, languageRank, compareParsed, compareCam, sizeClass,
   qualityTier, compareWithProfile, compareCamWithProfile,
   tierRank, resolutionRankFor, sizeClassRank,

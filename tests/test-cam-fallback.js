@@ -62,7 +62,7 @@ eq(ram.cam[0].camKind, 'TeleCine', 'best CAM first: TeleCine');
 
 const ramMerge = mergeStreamResults([{ name: 'torrentio', streams: ram.kept, cam: ram.cam }], 40);
 eq(ramMerge.usedCam, true, 'merge falls back to CAM when clean is empty');
-eq(ramMerge.parsed.length, 36, 'merge returns all 36 CAM streams (under cap 40)');
+eq(ramMerge.parsed.length, 28, 'merge returns the 28 UNIQUE CAM streams (v1.6.3: 8 re-upload duplicates merged — 3x 1080p 3.12 GB, 2x 1080p 3.37 GB, 2x 720p 1.14 GB, 2x 720p 1.19 GB, 4x 720p 1.76 GB)');
 const ramOut = ramMerge.parsed.map(formatStream);
 check(ramOut.every((o) => (o.description.split('\n')[0] || '').includes('CAM')), 'every CAM stream has CAM in its Quality line (first line)');
 check(ramOut.every((o) => !/Note:/.test(o.description)), 'no Note line in any CAM stream description (v1.1.3: Note line removed)');

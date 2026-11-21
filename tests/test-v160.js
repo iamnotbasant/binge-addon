@@ -36,9 +36,15 @@ let fail = 0;
 const check = (ok, msg) => { console.log(`  ${ok ? '✓' : '✗ FAIL'} ${msg}`); if (!ok) fail++; };
 const eq = (got, want, msg) => check(got === want, `${msg}\n      got:  ${JSON.stringify(got)}\n      want: ${JSON.stringify(want)}`);
 
-const desk = { maxRes: DEFAULT_PROFILES.desktop.maxRes, profileCfg: DEFAULT_PROFILES.desktop };
-const phone = { maxRes: DEFAULT_PROFILES.phone.maxRes, profileCfg: DEFAULT_PROFILES.phone };
-const tv = { maxRes: DEFAULT_PROFILES.tv.maxRes, profileCfg: DEFAULT_PROFILES.tv };
+// v1.6.3: the fixture's R2 links were signed 20261120T100750Z (8 h
+// validity, expired 18:07 UTC 20 Nov) — pin "now" inside that window
+// so the expired-link filter does not eat the fixture while this test
+// verifies the fake-2160p fix. The expiry filter itself is covered
+// (with its own pinned times) in tests/test-v163.js.
+const NOW_MS = Date.UTC(2026, 10, 20, 11, 0, 0);
+const desk = { maxRes: DEFAULT_PROFILES.desktop.maxRes, profileCfg: DEFAULT_PROFILES.desktop, nowMs: NOW_MS };
+const phone = { maxRes: DEFAULT_PROFILES.phone.maxRes, profileCfg: DEFAULT_PROFILES.phone, nowMs: NOW_MS };
+const tv = { maxRes: DEFAULT_PROFILES.tv.maxRes, profileCfg: DEFAULT_PROFILES.tv, nowMs: NOW_MS };
 
 // ---------------------------------------------------------------------------
 // 0. Manifest
@@ -47,7 +53,7 @@ console.log('=== 0. Manifest ===');
 {
   const list = catalogs();
   eq(MANIFEST.id, 'com.bharatstreams', 'manifest id unchanged (no reinstall)');
-  eq(MANIFEST.version, '1.6.1', 'manifest version 1.6.1');
+  eq(MANIFEST.version, '1.6.3', 'manifest version 1.6.1');
   eq(list.length, 18, '18 catalogs (no row added or removed)');
 }
 

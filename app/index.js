@@ -29,7 +29,7 @@ const { readProfiles, writeProfiles, resolveProfile, createCustomProfile } = req
 
 const STREAM_CAP = 40;
 const ADDON_NAME = 'binge-addon';
-const VERSION = '1.6.1';
+const VERSION = '1.6.3';
 
 const builder = new addonBuilder(MANIFEST);
 

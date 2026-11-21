@@ -6,7 +6,7 @@
 
 'use strict';
 
-const { processSourceStreams, compareParsed, compareCam, dedupe } = require('./parse');
+const { processSourceStreams, compareParsed, compareCam, dedupe, extractDisplayName, sizeBytes } = require('./parse');
 
 const PER_SOURCE_TIMEOUT_MS = 3500;
 const OVERALL_DEADLINE_MS = 7000;
@@ -131,7 +131,47 @@ async function fetchAllStreams(type, id, opts = {}) {
   return collected;
 }
 
-module.exports = { fetchAllStreams, mergeStreamResults, SOURCES, PER_SOURCE_TIMEOUT_MS, OVERALL_DEADLINE_MS };
+module.exports = { fetchAllStreams, mergeStreamResults, mergeDuplicates, SOURCES, PER_SOURCE_TIMEOUT_MS, OVERALL_DEADLINE_MS };
+
+// Merge duplicate rows (v1.6.3): the same file on several hosts
+// (HdHub serves one file on 4 hosts; Torrentio re-uploads the same
+// file) shows as 4 identical rows. Rows sharing the locked display
+// name + resolution + exact size + audio languages collapse to ONE,
+// keeping the pixeldrain copy when present (its links never expire)
+// and otherwise the best-ranked copy. Only rows with a KNOWN size
+// and resolution merge — a row with no size/res (e.g. the HubCDN
+// blanks) is never merged, because two different files could share
+// its key. Runs AFTER the sort, so the kept copy is the best-ranked
+// one; the cap then counts unique rows, not duplicates.
+function duplicateKey(p) {
+  if (!p.resolution || !p.size) return null;
+  const name = extractDisplayName(p.displayTitle) || p.displayTitle || '';
+  const bytes = sizeBytes(p.size);
+  if (!bytes) return null;
+  const langs = [...(p.audioLangs || p.langs || [])].sort().join('+');
+  return `${name}|${p.resolution}|${bytes}|${langs}`;
+}
+function isPixeldrain(p) {
+  const u = (p.raw && p.raw.url) || '';
+  return typeof u === 'string' && u.includes('pixeldrain.dev');
+}
+function mergeDuplicates(list) {
+  const seen = new Map();
+  const out = [];
+  let merged = 0;
+  for (const p of list) {
+    const key = duplicateKey(p);
+    if (!key) { out.push(p); continue; }
+    const existing = seen.get(key);
+    if (!existing) { seen.set(key, p); out.push(p); continue; }
+    merged++;
+    if (isPixeldrain(p) && !isPixeldrain(existing)) {
+      out[out.indexOf(existing)] = p;
+      seen.set(key, p);
+    }
+  }
+  return { list: out, merged };
+}
 
 // Merge per-source results into the final stream list (v1.1.2 CAM rule):
 // clean streams from ALL sources first; the CAM pool is used ONLY when
@@ -153,9 +193,14 @@ function mergeStreamResults(results, cap, cmps) {
     if (r.cam) cam.push(...r.cam);
   }
   clean.sort(compare);
-  const dedupedClean = dedupe(clean).slice(0, cap);
-  if (dedupedClean.length) return { parsed: dedupedClean, usedCam: false };
+  const dedupedClean = dedupe(clean);
+  const mergedClean = mergeDuplicates(dedupedClean);
+  if (mergedClean.merged) console.log(`[binge-addon] mergeStreamResults: merged ${mergedClean.merged} duplicate rows`);
+  const parsedClean = mergedClean.list.slice(0, cap);
+  if (parsedClean.length) return { parsed: parsedClean, usedCam: false };
   cam.sort(compareCamFn);
-  const dedupedCam = dedupe(cam).slice(0, cap);
-  return { parsed: dedupedCam, usedCam: true };
+  const dedupedCam = dedupe(cam);
+  const mergedCam = mergeDuplicates(dedupedCam);
+  if (mergedCam.merged) console.log(`[binge-addon] mergeStreamResults: merged ${mergedCam.merged} duplicate CAM rows`);
+  return { parsed: mergedCam.list.slice(0, cap), usedCam: true };
 }

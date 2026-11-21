@@ -225,7 +225,7 @@ eq(resolveProfile(doc, 'tv').sizeClassOrder, null, 'TV has no size classes');
 console.log('\n=== 6. Merge invariant (profile) ===');
 const many = [];
 for (let i = 0; i < 30; i++) many.push(synth(`Dune.2021.1080p.BluRay.REMUX.HDR`, 5, `${20 + i}.0 GB`));
-for (let i = 0; i < 30; i++) many.push(synth(`Dune.2021.720p.BluRay.x264`, 40, `${1 + (i % 3)}.5 GB`));
+for (let i = 0; i < 30; i++) many.push(synth(`Dune.2021.720p.BluRay.x264`, 40, `${(1 + i * 0.1).toFixed(1)} GB`)); // v1.6.3: distinct sizes — the old `${1 + (i % 3)}.5 GB` cycling made 10 copies of each size, which the duplicate-merge now (correctly) collapses
 const phMany = processSourceStreams('torrentio', many, { profileCfg: DEFAULT_PROFILES.phone });
 const merged = mergeStreamResults(
   [{ name: 'torrentio', streams: phMany.kept, cam: phMany.cam }], 40,
