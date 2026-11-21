@@ -121,7 +121,12 @@ const EXPECTED = {
   'mirzapur-series-synthetic': ['Mirzapur S01E01', 'Quality: 1080p WEB-DL\nAudio: Hindi | DD+ 5.1\nSize: 2.41 GB'],
 };
 for (const f of fixtures) {
-  const { kept } = processSourceStreams(f.source, [f.raw]);
+  // v1.6.3: the corpus HdHub rows were captured 18 Nov 2026 and their
+  // R2 links were signed 20261118T0350Z (8 h validity) — pin "now" to
+  // 04:00 UTC that day so the expired-link filter does not eat them
+  // while this test verifies the display format. Expiry itself is
+  // covered (with its own pinned times) in tests/test-v163.js.
+  const { kept } = processSourceStreams(f.source, [f.raw], { nowMs: Date.UTC(2026, 10, 18, 4, 0, 0) });
   check(kept.length === 1, `${f.id}: pipeline keeps the stream (got ${kept.length})`);
   if (!kept.length) continue;
   const out = formatStream(kept[0]);
@@ -142,7 +147,7 @@ console.log('\n=== 5. Format invariants (all fixtures) ===');
 const TECH_IN_NAME = /\b(480|720|1080|2160)p?\b|bluray|web-dl|webrip|hdrip|hdtv|hevc|x264|x265|avc|\bDD\+?\b|dts|aac|atmos|\d+(\.\d+)?\s*(GB|MB)\b|esub|hq\b/i;
 const outputs = [];
 for (const f of fixtures) {
-  const { kept } = processSourceStreams(f.source, [f.raw]);
+  const { kept } = processSourceStreams(f.source, [f.raw], { nowMs: Date.UTC(2026, 10, 18, 4, 0, 0) });
   if (kept.length) outputs.push({ id: f.id, ...formatStream(kept[0]) });
 }
 check(!outputs.some((o) => TECH_IN_NAME.test(o.name)), 'no tech/size/codec/junk token in any name');

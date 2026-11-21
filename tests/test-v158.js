@@ -46,7 +46,7 @@ console.log('=== 0. Manifest ===');
 {
   const list = catalogs();
   eq(MANIFEST.id, 'com.bharatstreams', 'manifest id unchanged (no reinstall)');
-  eq(MANIFEST.version, '1.6.1', 'manifest version 1.6.1');
+  eq(MANIFEST.version, '1.6.3', 'manifest version 1.6.1');
   eq(list.length, 18, '18 catalogs (no row added or removed)');
   eq(list[2].id, 'new-releases-movie', 'row 3 = New Releases movie');
   eq(list[3].id, 'new-releases-series', 'row 4 = New Releases series');

@@ -9,8 +9,11 @@
 // A profile cfg drives the whole rank (see compareWithProfile in
 // lib/parse.js):
 //   keyOrder: which rank keys, in which order.
-//     desktop/phone: language > resolution > sizeClass > tier > size > seeders
-//     TV: language > tier > resolution > size > seeders (no size class)
+//     desktop/phone: language > resolution > source > sizeClass > tier > size > seeders
+//     TV: language > tier > resolution > source > size > seeders (no size class)
+//   source: HdHub (direct HTTP) first, then Torrentio, then Comet
+//     (v1.6.3, basant: "pehle priority HdHub ko, then torrent ko") —
+//     after language + resolution, so Hindi-first and 1080p-first hold.
 //   resolutionOrder: resolutions best-first. A resolution NOT in the
 //     list is disabled for that profile (dropped at filter time).
 //   sizeClassOrder: size classes best-first; null = size classes off (TV).
@@ -27,8 +30,8 @@
 const TIER_NAMES = ['Remux', 'BluRay', 'WEB-DL', 'BDRip', 'WEBRip', 'HDRip', 'HDTV', 'none'];
 const RESOLUTIONS = [2160, 1080, 1080.1, 720, 480];
 const SIZE_CLASSES = [0, 1, 2, 3];
-const KEY_ORDER = ['language', 'resolution', 'sizeClass', 'tier', 'size', 'seeders'];
-const TV_KEY_ORDER = ['language', 'tier', 'resolution', 'size', 'seeders'];
+const KEY_ORDER = ['language', 'resolution', 'source', 'sizeClass', 'tier', 'size', 'seeders'];
+const TV_KEY_ORDER = ['language', 'tier', 'resolution', 'source', 'size', 'seeders'];
 const PROFILE_IDS = ['desktop', 'phone', 'tv'];
 
 const DEFAULT_PROFILES = {

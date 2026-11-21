@@ -52,7 +52,7 @@ console.log('=== 0. Manifest + config ===');
 {
   const list = catalogs();
   eq(MANIFEST.id, 'com.bharatstreams', 'manifest id unchanged (no reinstall)');
-  eq(MANIFEST.version, '1.6.1', 'manifest version 1.6.1');
+  eq(MANIFEST.version, '1.6.3', 'manifest version 1.6.1');
   eq(list.length, 18, '18 catalogs (17 + 1 new row)');
   eq(list[10].id, 'latest-indian-series-series', 'row 11 = Latest Indian Web Series');
   eq(list[11].id, 'indian-tv-reality-series', 'row 12 = Indian TV & Reality Shows (right after Latest Indian Web Series)');
